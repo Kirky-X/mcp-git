@@ -1,0 +1,162 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "mcp-git-overview",
+    "title": "mcp-git Overview",
+    "tags": ["mcp-git", "git"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Task Queue Status",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "mcp_git_active_tasks",
+            "legendFormat": "Active Tasks",
+            "refId": "A"
+          },
+          {
+            "expr": "mcp_git_queued_tasks",
+            "legendFormat": "Queued Tasks",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Tasks"},
+          {"format": "short"}
+        ],
+        "xaxis": {"show": true}
+      },
+      {
+        "id": 2,
+        "title": "Operations per Minute",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(mcp_git_clone_operations_total[1m])",
+            "legendFormat": "Clones",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(mcp_git_push_operations_total[1m])",
+            "legendFormat": "Pushes",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(mcp_git_pull_operations_total[1m])",
+            "legendFormat": "Pulls",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Operations/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Task Completion Rate",
+        "type": "gauge",
+        "gridPos": {"x": 0, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "(rate(mcp_git_completed_tasks_total[5m]) / (rate(mcp_git_completed_tasks_total[5m]) + rate(mcp_git_failed_tasks_total[5m]))) * 100",
+            "legendFormat": "Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Workspace Disk Usage",
+        "type": "gauge",
+        "gridPos": {"x": 6, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "(mcp_git_workspace_disk_usage_bytes / 10737418240) * 100",
+            "legendFormat": "Disk Usage",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Task Duration Distribution",
+        "type": "heatmap",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(mcp_git_task_duration_seconds_bucket[5m])",
+            "legendFormat": "{{ le }}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Active Workers",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "mcp_git_worker_count",
+            "legendFormat": "Workers",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Total Completed Tasks",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 12, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "mcp_git_completed_tasks_total",
+            "legendFormat": "Completed",
+            "refId": "A"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "links": []
+  }
+}
