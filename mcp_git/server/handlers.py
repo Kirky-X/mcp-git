@@ -83,7 +83,7 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
         # Fast path: check if handler is registered in the registry
         handler = TOOL_HANDLER_REGISTRY.get(name)
         if handler:
-            result = await handler(server, arguments)
+            result = await handler(server, arguments)  # type: ignore[misc]
             if isinstance(result, list):
                 return result  # type: ignore[return-value]
             return [TextContent(type="text", text=str(result))]  # type: ignore[return-value]
