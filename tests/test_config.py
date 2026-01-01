@@ -58,21 +58,22 @@ class TestConfig:
         config = ExecutionConfig()
 
         assert config.max_concurrent_tasks == 10
-        assert config.task_timeout == 300  # 5 minutes
+        assert config.task_timeout_seconds == 300  # 5 minutes
         assert config.worker_count == 4
 
     def test_config_from_env_vars(self, monkeypatch):
-        """Test config loading from environment variables."""
+        """Test loading config from environment variables."""
         from mcp_git.config import load_config
 
-        monkeypatch.setenv("MCP_GIT_WORKSPACE_PATH", "/custom/workspace")
-        monkeypatch.setenv("MCP_GIT_DATABASE_PATH", "/custom/database.db")
+        # Use /tmp instead of /custom for better test compatibility
+        monkeypatch.setenv("MCP_GIT_WORKSPACE_PATH", "/tmp/mcp-git-test/workspace")
+        monkeypatch.setenv("MCP_GIT_DATABASE_PATH", "/tmp/mcp-git-test/database.db")
         monkeypatch.setenv("MCP_GIT_SERVER_PORT", "8080")
 
         config = load_config()
 
-        assert config.workspace.path == Path("/custom/workspace")
-        assert config.database.path == Path("/custom/database.db")
+        assert config.workspace.path == Path("/tmp/mcp-git-test/workspace")
+        assert config.database.path == Path("/tmp/mcp-git-test/database.db")
         assert config.server.port == 8080
 
     def test_config_validation(self):
@@ -80,9 +81,9 @@ class TestConfig:
         from mcp_git.config import ExecutionConfig
 
         # Valid config
-        config = ExecutionConfig(max_concurrent_tasks=5, task_timeout=600)
+        config = ExecutionConfig(max_concurrent_tasks=5, task_timeout_seconds=600)
         assert config.max_concurrent_tasks == 5
-        assert config.task_timeout == 600
+        assert config.task_timeout_seconds == 600
 
     def test_config_invalid_values(self):
         """Test config with invalid values."""
