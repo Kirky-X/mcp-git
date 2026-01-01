@@ -128,7 +128,7 @@ class RepoMetadataCache:
             logger.info("Using moka for repository metadata cache")
         except ImportError:
             logger.warning("moka not installed, falling back to simple dict cache")
-            self._cache: dict[str, RepoMetadata] = {}
+            self._cache = {}
             self._use_moka = False
 
     def _generate_cache_key(self, repo_url: str, path: Path | None = None) -> str:

@@ -243,7 +243,7 @@ class Cache:
             self._use_moka = True
         except ImportError:
             logger.warning("moka not installed, falling back to simple dict cache")
-            self._cache: dict[str, Any] = {}
+            self._cache = {}
             self._use_moka = False
 
     def get(self, key: str, cache_type: str = "generic") -> Any | None:
