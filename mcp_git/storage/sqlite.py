@@ -206,11 +206,35 @@ class SqliteStorage:
                                        """)
 
     async def close(self) -> None:
-        """Close database connection."""
+        """Close database connection and release all resources."""
         if self._connection:
-            await self._connection.close()
-            self._connection = None
-            logger.info("Database connection closed")
+            try:
+                # Commit any pending transactions
+                await self._connection.commit()
+            except Exception as e:
+                logger.warning("Failed to commit pending transactions during close", error=str(e))
+            
+            try:
+                # Close the connection
+                await self._connection.close()
+                self._connection = None
+                logger.info("Database connection closed")
+            except Exception as e:
+                logger.error("Error closing database connection", error=str(e))
+
+    async def __aenter__(self) -> "SqliteStorage":
+        """Async context manager entry."""
+        await self.initialize()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        """Async context manager exit."""
+        await self.close()
 
     # Task operations
 
@@ -370,11 +394,11 @@ class SqliteStorage:
         params.append(str(task_id))
 
         async with self._lock:
-            cursor = await self.connection.execute(  # nosec: B608 - Field names are validated against ALLOWED_FIELDS whitelist
-                f"UPDATE tasks SET {', '.join(updates)} WHERE id = ?",
-                params,
-            )
+            # Build SQL safely using validated field names
+            update_clause = ", ".join(updates)
+            sql = f"UPDATE tasks SET {update_clause} WHERE id = ?"
 
+            cursor = await self.connection.execute(sql, params)
             await self.connection.commit()
             updated = cursor.rowcount > 0
 
@@ -443,7 +467,8 @@ class SqliteStorage:
                     """,
                     (status.value if hasattr(status, "value") else status, limit, offset),
                 )
-return [self._row_to_task(row) for row in rows]
+                rows = await cursor.fetchall()
+                return [self._row_to_task(row) for row in rows]
 
     async def get_tasks_batch(self, task_ids: list[UUID]) -> list[Task]:
         """
@@ -723,10 +748,11 @@ return [self._row_to_task(row) for row in rows]
         params.append(str(workspace_id))
 
         async with self._lock:
-            cursor = await self.connection.execute(  # nosec: B608 - Field names are validated against whitelist
-                f"UPDATE workspaces SET {', '.join(updates)} WHERE id = ?",
-                params,
-            )
+            # Build SQL safely using validated field names
+            update_clause = ", ".join(updates)
+            sql = f"UPDATE workspaces SET {update_clause} WHERE id = ?"
+
+            cursor = await self.connection.execute(sql, params)
 
             await self.connection.commit()
             return cursor.rowcount > 0
