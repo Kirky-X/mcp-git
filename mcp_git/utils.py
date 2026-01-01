@@ -6,6 +6,7 @@ path validation, and other helper functions used throughout the application.
 """
 
 import re
+import unicodedata
 from pathlib import Path
 
 # Maximum allowed input length
@@ -58,8 +59,11 @@ def sanitize_input(input_str: str) -> str:
     if not input_str:
         return input_str
 
+    # Unicode normalization to prevent homograph attacks
+    result = unicodedata.normalize('NFKC', input_str)
+
     # Truncate to max length
-    result = input_str[:MAX_INPUT_LENGTH]
+    result = result[:MAX_INPUT_LENGTH]
 
     # Remove shell metacharacters
     shell_metacharacters = r'[;&|`$(){}[\]<>\\"\']'
@@ -152,8 +156,8 @@ def sanitize_path(path: Path, base: Path) -> Path:
     # Check if the path is within the base directory
     try:
         target.relative_to(base)
-    except ValueError:
-        raise ValueError(f"Path traversal attempt detected: {path} is outside {base}")
+    except ValueError as e:
+        raise ValueError(f"Path traversal attempt detected: {path} is outside {base}") from e
 
     # Additional checks for suspicious patterns
     path_str = str(target)
@@ -290,7 +294,7 @@ def truncate_text(text: str, max_length: int = 1000, suffix: str = "...") -> str
     return text[: max_length - len(suffix)] + suffix
 
 
-def format_bytes(size: int) -> str:
+def format_bytes(size: int | float) -> str:
     """Format bytes into human-readable format.
 
     Args:
@@ -299,6 +303,7 @@ def format_bytes(size: int) -> str:
     Returns:
         Formatted size string
     """
+    size = float(size)  # Ensure size is a float for division
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size < 1024:
             return f"{size:.2f} {unit}"
