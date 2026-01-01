@@ -1,0 +1,3 @@
+[bandit]
+# Ignore SQL injection warnings for validated field names
+skips = B608

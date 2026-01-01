@@ -1,0 +1,109 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.benchmarks/
+
+# Type Checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Code Quality
+.ruff_cache/
+.flake8
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+*.bak
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary Files
+temp/
+*.cache
+
+# Test Data Temporary Files
+test-data/data/repos/*/.git/
+test-data/data/repos/*/hooks/
+test-data/data/repos/*/objects/
+test-data/data/repos/*/refs/
+test-data/data/repos/*/info/
+test-data/data/repos/*/logs/
+test-data/data/repos/*/config
+test-data/data/repos/*/description
+test-data/data/repos/*/HEAD
+
+# Template Build Artifacts
+templates/python-ci/.ruff_cache/
+templates/python-ci/.mypy_cache/
+templates/python-ci/.pytest_cache/
+templates/python-ci/__pycache__/
+
+# Report Files
+CODE_AUDIT_REPORT.md
+CROSS_CHECK_REPORT.md
+DOCUMENTATION_UPDATE_SUMMARY.md
+TEST_CROSS_CHECK_REPORT.md
+CLAUDE.md
+IFLOW.md
+
+# Project Specific
+/tmp/mcp-git/
