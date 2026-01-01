@@ -91,6 +91,7 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
         # Workspace operations
         if name == "git_allocate_workspace":
             result = await server.allocate_workspace()
+            return [TextContent(type="text", text=str(result))]
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
         elif name == "git_get_workspace":

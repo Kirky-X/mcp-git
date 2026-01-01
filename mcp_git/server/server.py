@@ -130,9 +130,13 @@ class McpGitServer:
         if self.facade:
             try:
                 active_tasks = await self.facade.task_manager.get_active_tasks()
-                health["components"]["workers"] = f"{len(active_tasks)} active"
+                components = health["components"]
+                if isinstance(components, dict):
+                    components["workers"] = f"{len(active_tasks)} active"
             except Exception:
-                health["components"]["workers"] = "unknown"
+                components = health["components"]
+                if isinstance(components, dict):
+                    components["workers"] = "unknown"
 
         return health
 
