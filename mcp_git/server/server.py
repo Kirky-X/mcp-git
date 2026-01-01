@@ -129,8 +129,8 @@ class McpGitServer:
         # Check facade health if available
         if self.facade:
             try:
-                workers = self.facade.task_manager.worker_pool
-                health["components"]["workers"] = f"{len(workers._workers)} active"
+                active_tasks = await self.facade.task_manager.get_active_tasks()
+                health["components"]["workers"] = f"{len(active_tasks)} active"
             except Exception:
                 health["components"]["workers"] = "unknown"
 

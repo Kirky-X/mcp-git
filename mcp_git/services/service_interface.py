@@ -160,7 +160,7 @@ class WorkspaceServiceInterface(ABC):
         pass
 
     @abstractmethod
-    async def cleanup_expired_workspaces(self) -> int:
+    async def cleanup_expired_workspaces(self) -> tuple[int, int]:
         """Clean up expired workspaces."""
         pass
 

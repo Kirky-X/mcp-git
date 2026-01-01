@@ -83,7 +83,8 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
         # Fast path: check if handler is registered in the registry
         handler = TOOL_HANDLER_REGISTRY.get(name)
         if handler:
-            return await handler(server, arguments)
+            result = await handler(server, arguments)
+            return result  # type: ignore[return-value]
 
         # Fallback to if-elif chain for unregistered tools
         # Workspace operations
