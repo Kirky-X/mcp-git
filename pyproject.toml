@@ -43,7 +43,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
 
     # Security
-    "secrecy>=1.2.0",
+    "secrecy>=1.0.0,<1.2.0",
 
     # Logging
     "loguru>=0.7.0",
@@ -107,6 +107,8 @@ include = '\.pyi?$'
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
