@@ -70,39 +70,45 @@ class McpGitServer:
         """Initialize server components."""
         logger.info("Initializing MCP server")
 
-        # Initialize storage
-        await self.storage.initialize()
-        self._storage_initialized = True
+        try:
+            # Initialize storage
+            await self.storage.initialize()
+            self._storage_initialized = True
 
-        # Initialize facade
-        workspace_config = WorkspaceConfig(
-            root_path=self.config.workspace.path,
-            max_size_bytes=self.config.workspace.max_size_bytes,
-            retention_seconds=self.config.workspace.retention_seconds,
-        )
+            # Initialize facade
+            workspace_config = WorkspaceConfig(
+                root_path=self.config.workspace.path,
+                max_size_bytes=self.config.workspace.max_size_bytes,
+                retention_seconds=self.config.workspace.retention_seconds,
+            )
 
-        task_config = TaskConfig(
-            max_concurrent_tasks=self.config.execution.max_concurrent_tasks,
-            task_timeout_seconds=self.config.execution.task_timeout,
-            result_retention_seconds=self.config.database.task_retention_seconds,
-        )
+            task_config = TaskConfig(
+                max_concurrent_tasks=self.config.execution.max_concurrent_tasks,
+                task_timeout_seconds=self.config.execution.task_timeout,
+                result_retention_seconds=self.config.database.task_retention_seconds,
+            )
 
-        self.facade = GitServiceFacade(
-            storage=self.storage,
-            workspace_config=workspace_config,
-            task_config=task_config,
-        )
+            self.facade = GitServiceFacade(
+                storage=self.storage,
+                workspace_config=workspace_config,
+                task_config=task_config,
+            )
 
-        await self.facade.start()
+            await self.facade.start()
 
-        # Start metrics server
-        from mcp_git.metrics import start_metrics_server
+            # Start metrics server
+            from mcp_git.metrics import start_metrics_server
 
-        metrics_port = 9090
-        start_metrics_server(metrics_port)
-        logger.info(f"Metrics server started on port {metrics_port}")
+            metrics_port = 9090
+            start_metrics_server(metrics_port)
+            logger.info(f"Metrics server started on port {metrics_port}")
 
-        logger.info("MCP server initialized")
+            logger.info("MCP server initialized")
+        except Exception as e:
+            # Clean up resources if initialization fails
+            logger.error("Server initialization failed, cleaning up resources", error=str(e))
+            await self._cleanup_on_error()
+            raise
 
     async def get_health(self) -> dict[str, Any]:
         """
@@ -128,6 +134,22 @@ class McpGitServer:
                 health["components"]["workers"] = "unknown"
 
         return health
+
+    async def _cleanup_on_error(self) -> None:
+        """Clean up resources after initialization error."""
+        try:
+            if self.facade:
+                await self.facade.stop()
+                self.facade = None
+        except Exception as e:
+            logger.warning("Error stopping facade during cleanup", error=str(e))
+
+        try:
+            if self._storage_initialized:
+                await self.storage.close()
+                self._storage_initialized = False
+        except Exception as e:
+            logger.warning("Error closing storage during cleanup", error=str(e))
 
     async def shutdown(self) -> None:
         """Shutdown server components."""
