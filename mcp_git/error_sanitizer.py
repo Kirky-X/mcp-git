@@ -45,7 +45,7 @@ class ErrorSanitizer:
         (r'(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})', r'\1.***.***.\4'),
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the error sanitizer."""
         self._compiled_patterns = []
         for pattern, replacement in self.SENSITIVE_PATTERNS:

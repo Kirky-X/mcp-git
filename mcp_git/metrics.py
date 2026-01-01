@@ -225,6 +225,12 @@ class Cache:
     """Moka-based cache with metrics."""
 
     def __init__(self, max_size: int = 1000, ttl: int = 3600) -> None:
+        self._cache: Any = None
+        self._max_size = max_size
+        self._ttl = ttl
+        self._access_times: dict[str, float] = {}
+        self._use_moka = False
+
         try:
             from moka import MokaCache
 
@@ -234,15 +240,11 @@ class Cache:
                 timer=time.time,
             )
             self._cache_type = "generic"
+            self._use_moka = True
         except ImportError:
             logger.warning("moka not installed, falling back to simple dict cache")
             self._cache: dict[str, Any] = {}
-            self._max_size = max_size
-            self._ttl = ttl
-            self._access_times: dict[str, float] = {}
             self._use_moka = False
-        else:
-            self._use_moka = True
 
     def get(self, key: str, cache_type: str = "generic") -> Any | None:
         """Get a value from the cache."""

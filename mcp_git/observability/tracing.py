@@ -6,7 +6,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from loguru import logger
 
@@ -60,7 +60,7 @@ class Tracer:
     This tracer manages spans and provides distributed tracing functionality.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the tracer."""
         self._spans: dict[str, Span] = {}
         self._root_spans: list[Span] = []
@@ -221,7 +221,7 @@ async def trace(
 def trace_sync(
     operation_name: str,
     tags: dict[str, Any] | None = None,
-):
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator for tracing synchronous functions.
 
@@ -233,8 +233,8 @@ def trace_sync(
         Decorator function
     """
 
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             tracer = get_tracer()
             parent_span = tracer.get_current_span()
             parent_span_id = parent_span.span_id if parent_span else None
@@ -261,7 +261,7 @@ def trace_sync(
 def trace_async(
     operation_name: str,
     tags: dict[str, Any] | None = None,
-):
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator for tracing asynchronous functions.
 
@@ -273,8 +273,8 @@ def trace_async(
         Decorator function
     """
 
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             tracer = get_tracer()
             parent_span = tracer.get_current_span()
             parent_span_id = parent_span.span_id if parent_span else None

@@ -114,6 +114,8 @@ class RepoMetadataCache:
         self._max_entries = max_entries
         self._default_ttl = default_ttl
         self._lock = asyncio.Lock()
+        self._cache: Any = None
+        self._use_moka = False
 
         try:
             from moka import MokaCache
