@@ -137,7 +137,7 @@ class TestErrorSanitizerContext:
 
     def test_context_with_parameters(self):
         """Test that parameters in context are sanitized."""
-        message = "Error: parameters: {\"password\": \"secret123\"}"
+        message = 'Error: parameters: {"password": "secret123"}'
         context = {"parameters": {"password": "secret123"}}
         sanitized = error_sanitizer.sanitize(message, context)
         assert "secret123" not in sanitized

@@ -245,14 +245,19 @@ class TestConfigIntegration:
 
     def test_config_from_env_vars(self, monkeypatch):
         """Test loading config from environment variables."""
+        import tempfile
+
         from mcp_git.config import load_config
 
-        monkeypatch.setenv("MCP_GIT_WORKSPACE_PATH", "/custom/workspace")
+        temp_dir = tempfile.gettempdir()
+        workspace_path = str(Path(temp_dir) / "custom" / "workspace")
+
+        monkeypatch.setenv("MCP_GIT_WORKSPACE_PATH", workspace_path)
         monkeypatch.setenv("MCP_GIT_SERVER_PORT", "8080")
 
         config = load_config()
 
-        assert str(config.workspace.path) == "/custom/workspace"
+        assert str(config.workspace.path) == workspace_path
         assert config.server.port == 8080
 
 
@@ -660,6 +665,7 @@ class TestLFSIntegration:
         repo_path.mkdir()
 
         import git
+
         git.Repo.init(str(repo_path))
 
         # Initialize LFS
@@ -674,6 +680,7 @@ class TestLFSIntegration:
         repo_path.mkdir()
 
         import git
+
         git.Repo.init(str(repo_path))
 
         # Initialize LFS - should not raise
@@ -820,6 +827,7 @@ class TestLFSIntegration:
         repo_path.mkdir()
 
         import git
+
         git.Repo.init(str(repo_path))
 
         # Install LFS hooks
@@ -836,6 +844,7 @@ class TestLFSIntegration:
         repo_path.mkdir()
 
         import git
+
         repo = git.Repo.init(str(repo_path))
 
         # Create .gitattributes with LFS patterns first
@@ -876,6 +885,7 @@ class TestLFSIntegration:
         repo_path.mkdir()
 
         import git
+
         git.Repo.init(str(repo_path))
 
         # Create and commit .gitattributes first
@@ -919,6 +929,7 @@ class TestLFSEndToEnd:
         repo_path.mkdir()
 
         import git
+
         repo = git.Repo.init(str(repo_path))
 
         # Create initial commit first (required for git operations)
@@ -966,6 +977,7 @@ class TestLFSEndToEnd:
         repo_path.mkdir()
 
         import git
+
         repo = git.Repo.init(str(repo_path))
 
         # Initialize and track
@@ -1014,6 +1026,7 @@ class TestLFSEndToEnd:
         repo_path.mkdir()
 
         import git
+
         repo = git.Repo.init(str(repo_path))
 
         # Create initial commit first

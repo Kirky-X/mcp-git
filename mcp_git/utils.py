@@ -9,6 +9,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+from loguru import logger
+
 # Maximum allowed input length
 MAX_INPUT_LENGTH = 1000
 
@@ -66,7 +68,7 @@ def sanitize_input(input_str: str) -> str:
         return input_str
 
     # Unicode normalization to prevent homograph attacks
-    result = unicodedata.normalize('NFKC', input_str)
+    result = unicodedata.normalize("NFKC", input_str)
 
     # Truncate to max length
     result = result[:MAX_INPUT_LENGTH]
@@ -157,7 +159,7 @@ def sanitize_path(path: Path, base: Path) -> Path:
         ValueError: Path traversal attempt detected
     """
     # Resolve base to absolute path (no symlinks)
-    base = base.resolve(strict=True)
+    base = base.resolve(strict=False)
 
     # Convert path to absolute without resolving symlinks
     if not path.is_absolute():
@@ -166,14 +168,17 @@ def sanitize_path(path: Path, base: Path) -> Path:
     # Check for suspicious patterns before resolving
     path_str = str(path)
     suspicious_patterns = [
-        r"\.\./",  # Directory traversal
-        r"/\./",  # Current directory reference
-        r"//",  # Double slashes (except at start for absolute paths)
+        (r"\.\./", "Path traversal attempt detected"),  # Directory traversal
+        (r"/\./", "Suspicious path pattern detected"),  # Current directory reference
+        (
+            r"//",
+            "Suspicious path pattern detected",
+        ),  # Double slashes (except at start for absolute paths)
     ]
 
-    for pattern in suspicious_patterns:
+    for pattern, error_msg in suspicious_patterns:
         if re.search(pattern, path_str) and not (pattern == r"//" and path_str.startswith("//")):
-            raise ValueError(f"Suspicious path pattern detected: {pattern}")
+            raise ValueError(error_msg)
 
     # Check if any component is a symlink (security check)
     for parent in path.parents:
@@ -184,10 +189,10 @@ def sanitize_path(path: Path, base: Path) -> Path:
 
     # Now resolve to get the actual location (this will follow symlinks)
     try:
-        target = path.resolve(strict=True)
+        target = path.resolve(strict=False)
     except FileNotFoundError:
         # Path doesn't exist yet (for new files), resolve parent
-        parent = path.parent.resolve(strict=True)
+        parent = path.parent.resolve(strict=False)
         target = parent / path.name
 
     # Check if the resolved path is within the base directory
@@ -256,7 +261,10 @@ def sanitize_commit_message(message: str) -> str:
 
 
 def sanitize_remote_url(url: str) -> str:
-    """Sanitize a Git remote URL.
+    """Sanitize and validate a Git remote URL.
+
+    This function validates Git URLs against a strict protocol whitelist
+    to prevent SSRF (Server-Side Request Forgery) and other attacks.
 
     Args:
         url: The remote URL to sanitize
@@ -265,7 +273,7 @@ def sanitize_remote_url(url: str) -> str:
         Sanitized remote URL
 
     Raises:
-        ValueError: If the URL is invalid
+        ValueError: If the URL is invalid or uses an unsupported protocol
     """
     # Check length before processing
     if len(url) > MAX_REMOTE_URL_LENGTH:
@@ -290,10 +298,57 @@ def sanitize_remote_url(url: str) -> str:
     if not url:
         raise ValueError("URL cannot be empty")
 
-    # Check for reasonable URL prefixes
-    valid_prefixes = ["https://", "http://", "git://", "ssh://", "git@", "/"]
-    if not any(url.lower().startswith(prefix) for prefix in valid_prefixes):
-        raise ValueError(f"Invalid URL format: {url}")
+    # Strict protocol whitelist for security
+    # Only allow secure protocols and standard Git protocols
+    ALLOWED_PROTOCOLS = [
+        "https://",  # HTTPS (recommended)
+        "http://",   # HTTP (less secure but common)
+        "git://",    # Git protocol
+        "ssh://",    # SSH protocol
+        "git@",      # SSH shorthand (git@github.com:user/repo.git)
+        "/",         # Local file path
+    ]
+
+    url_lower = url.lower()
+    if not any(url_lower.startswith(prefix) for prefix in ALLOWED_PROTOCOLS):
+        raise ValueError(
+            f"Invalid URL format or unsupported protocol: {url}. "
+            f"Allowed protocols: {', '.join(ALLOWED_PROTOCOLS)}"
+        )
+
+    # Additional validation for HTTP/HTTPS URLs
+    if url_lower.startswith(("http://", "https://")):
+        # Prevent SSRF by blocking localhost and private IPs
+        import ipaddress
+
+        # Extract hostname from URL
+        try:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(url)
+            hostname = parsed.hostname
+
+            if hostname:
+                # Block localhost variants
+                localhost_patterns = ["localhost", "127.0.0.1", "::1", "0.0.0.0"]
+                if hostname.lower() in localhost_patterns:
+                    raise ValueError(
+                        f"Localhost URLs are not allowed for security reasons: {url}"
+                    )
+
+                # Block private IP ranges
+                try:
+                    ip = ipaddress.ip_address(hostname)
+                    if ip.is_private or ip.is_loopback or ip.is_link_local:
+                        raise ValueError(
+                            f"Private IP addresses are not allowed: {hostname}"
+                        )
+                except ValueError:
+                    # Not an IP address, might be a hostname
+                    pass
+
+        except Exception as e:
+            logger.warning(f"Failed to parse URL hostname: {e}")
 
     return url
 

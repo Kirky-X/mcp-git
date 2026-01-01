@@ -36,9 +36,7 @@ class RemoteOperations:
         """
         return await self.adapter.list_remotes(repo_path)
 
-    async def add_remote(
-        self, repo_path: Path, name: str, url: str
-    ) -> None:
+    async def add_remote(self, repo_path: Path, name: str, url: str) -> None:
         """
         Add a remote.
 

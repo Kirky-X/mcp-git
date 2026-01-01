@@ -31,10 +31,16 @@ class TestConfigurationLoading:
 
     def test_load_config_from_env(self):
         """测试从环境变量加载配置。"""
+        # Use a temporary directory path that we have permission to create
+        import tempfile
+
         from mcp_git.config import load_config
 
+        temp_dir = tempfile.gettempdir()
+        workspace_path = str(Path(temp_dir) / "custom" / "workspace")
+
         env_vars = {
-            "MCP_GIT_WORKSPACE_PATH": "/custom/workspace",
+            "MCP_GIT_WORKSPACE_PATH": workspace_path,
             "MCP_GIT_SERVER_PORT": "8080",
             "MCP_GIT_LOG_LEVEL": "DEBUG",
             "MCP_GIT_MAX_CONCURRENT_TASKS": "20",
@@ -43,7 +49,7 @@ class TestConfigurationLoading:
         with patch.dict(os.environ, env_vars, clear=False):
             config = load_config()
 
-            assert config.workspace.path == Path("/custom/workspace")
+            assert config.workspace.path == Path(workspace_path)
             assert config.server.port == 8080
             assert config.log_level == "DEBUG"
             assert config.execution.max_concurrent_tasks == 20
@@ -59,7 +65,7 @@ class TestConfigurationLoading:
         with patch.dict(os.environ, env_vars, clear=False):
             config = load_config()
 
-            assert config.git_token == "ghp_test_token_12345"
+            assert config.git_token.get_secret_value() == "ghp_test_token_12345"
 
     def test_git_token_mcp_prefix(self):
         """测试 Git Token 从 MCP_GIT_GIT_TOKEN 加载。"""
@@ -72,7 +78,7 @@ class TestConfigurationLoading:
         with patch.dict(os.environ, env_vars, clear=False):
             config = load_config()
 
-            assert config.git_token == "ghp_mcp_prefix_token"
+            assert config.git_token.get_secret_value() == "ghp_mcp_prefix_token"
 
     def test_config_override_precedence(self):
         """测试环境变量覆盖优先级。"""
@@ -87,20 +93,25 @@ class TestConfigurationLoading:
             config = load_config()
 
             # GIT_TOKEN 应该优先于 MCP_GIT_GIT_TOKEN
-            assert config.git_token == "ghp_env_token"
+            assert config.git_token.get_secret_value() == "ghp_env_token"
 
     def test_database_path_config(self):
         """测试数据库路径配置。"""
+        import tempfile
+
         from mcp_git.config import load_config
 
+        temp_dir = tempfile.gettempdir()
+        db_path = str(Path(temp_dir) / "custom" / "db" / "path" / "mcp-git.db")
+
         env_vars = {
-            "MCP_GIT_DATABASE_PATH": "/custom/db/path/mcp-git.db",
+            "MCP_GIT_DATABASE_PATH": db_path,
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
             config = load_config()
 
-            assert config.database.path == Path("/custom/db/path/mcp-git.db")
+            assert config.database.path == Path(db_path)
 
 
 class TestConfigurationValidation:
@@ -231,7 +242,7 @@ class TestSensitiveDataMasking:
             config = load_config()
 
             # 配置对象应该包含 token
-            assert config.git_token == "ghp_secret_token"
+            assert config.git_token.get_secret_value() == "ghp_secret_token"
 
     def test_config_repr_masking(self):
         """测试配置字符串表示中的脱敏。"""
@@ -302,11 +313,16 @@ class TestConfigurationIntegration:
 
     def test_full_config_flow(self):
         """测试完整配置流程。"""
+        import tempfile
+
         from mcp_git.config import load_config
         from mcp_git.main import setup_logging
 
+        temp_dir = tempfile.gettempdir()
+        workspace_path = str(Path(temp_dir) / "test" / "workspace")
+
         env_vars = {
-            "MCP_GIT_WORKSPACE_PATH": "/test/workspace",
+            "MCP_GIT_WORKSPACE_PATH": workspace_path,
             "MCP_GIT_SERVER_PORT": "8888",
             "MCP_GIT_LOG_LEVEL": "WARNING",
             "GIT_TOKEN": "ghp_integration_test_token",
@@ -316,10 +332,10 @@ class TestConfigurationIntegration:
             config = load_config()
 
             # 验证配置
-            assert config.workspace.path == Path("/test/workspace")
+            assert config.workspace.path == Path(workspace_path)
             assert config.server.port == 8888
             assert config.log_level == "WARNING"
-            assert config.git_token == "ghp_integration_test_token"
+            assert config.git_token.get_secret_value() == "ghp_integration_test_token"
 
             # 验证日志设置
             setup_logging(config.log_level)

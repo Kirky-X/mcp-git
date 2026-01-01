@@ -4,11 +4,12 @@ Tests for main module.
 Tests for server initialization, logging sanitization, and configuration loading.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
-import tempfile
 import os
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestLogSanitization:
@@ -54,7 +55,9 @@ class TestLogSanitization:
         """Test that private keys are sanitized."""
         from mcp_git.main import SENSITIVE_PATTERNS
 
-        log_message = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC..."
+        log_message = (
+            "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC..."
+        )
         sanitized = log_message
         for pattern, replacement in SENSITIVE_PATTERNS:
             sanitized = pattern.sub(replacement, sanitized)
@@ -121,8 +124,8 @@ class TestServerLifecycle:
     @pytest.mark.asyncio
     async def test_server_initialization(self):
         """Test server initialization."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
@@ -136,8 +139,8 @@ class TestServerLifecycle:
     @pytest.mark.asyncio
     async def test_server_health_check(self):
         """Test server health check."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
@@ -157,8 +160,8 @@ class TestServerLifecycle:
     @pytest.mark.asyncio
     async def test_server_double_initialization(self):
         """Test that server can be initialized multiple times."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
@@ -174,7 +177,7 @@ class TestServerLifecycle:
 class TestSignalHandling:
     """Test signal handling."""
 
-    @patch('asyncio.get_event_loop')
+    @patch("asyncio.get_event_loop")
     def test_signal_handler_registration(self, mock_loop):
         """Test that signal handlers are registered."""
         mock_loop_instance = MagicMock()
@@ -193,8 +196,8 @@ class TestErrorScenarios:
     @pytest.mark.asyncio
     async def test_server_initialization_failure(self):
         """Test server initialization with invalid configuration."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Use invalid path (assuming it doesn't exist and can't be created)

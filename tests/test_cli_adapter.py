@@ -75,7 +75,7 @@ class TestCliAdapter:
         malicious = Path("/safe/base/../../../etc/passwd")
 
         # Should raise ValueError for path traversal attempt
-        with pytest.raises(ValueError, match="traverse outside"):
+        with pytest.raises(ValueError, match="Path traversal attempt detected"):
             sanitize_path(malicious, base)
 
 

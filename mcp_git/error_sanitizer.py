@@ -15,34 +15,28 @@ class ErrorSanitizer:
     # Patterns for sensitive information
     SENSITIVE_PATTERNS = [
         # Passwords and tokens
-        (r'(password[=:]\s*)\S+', r'\1***'),
-        (r'(token[=:]\s*)\S+', r'\1***'),
-        (r'(secret[=:]\s*)\S+', r'\1***'),
-        (r'(api[_-]?key[=:]\s*)\S+', r'\1***'),
-        (r'(access[_-]?token[=:]\s*)\S+', r'\1***'),
-
+        (r"(password[=:]\s*)\S+", r"\1***"),
+        (r"(token[=:]\s*)\S+", r"\1***"),
+        (r"(secret[=:]\s*)\S+", r"\1***"),
+        (r"(api[_-]?key[=:]\s*)\S+", r"\1***"),
+        (r"(access[_-]?token[=:]\s*)\S+", r"\1***"),
         # Git tokens in URLs
-        (r'(https?://)[^:]+:(.+?)@', r'\1***:***@'),
-        (r'(git@)[^:]+:(.+?)@', r'\1***:***@'),
-
+        (r"(https?://)[^:]+:(.+?)@", r"\1***:***@"),
+        (r"(git@)[^:]+:(.+?)@", r"\1***:***@"),
         # SSH keys
-        (r'(-----BEGIN\s+.*?PRIVATE\s+KEY-----).+?(-----END\s+.*?PRIVATE\s+KEY-----)', r'\1***\2'),
-
+        (r"(-----BEGIN\s+.*?PRIVATE\s+KEY-----).+?(-----END\s+.*?PRIVATE\s+KEY-----)", r"\1***\2"),
         # File paths with sensitive directories
-        (r'/home/[^/\s]+/', r'/home/****/'),
-        (r'/root/', r'/****/'),
-        (r'/Users/[^/\s]+/', r'/Users/****/'),
-
+        (r"/home/[^/\s]+/", r"/home/****/"),
+        (r"/root/", r"/****/"),
+        (r"/Users/[^/\s]+/", r"/Users/****/"),
         # Database connection strings
-        (r'(mongodb://)[^:]+:[^@]+@', r'\1***:***@'),
-        (r'(postgres://)[^:]+:[^@]+@', r'\1***:***@'),
-
+        (r"(mongodb://)[^:]+:[^@]+@", r"\1***:***@"),
+        (r"(postgres://)[^:]+:[^@]+@", r"\1***:***@"),
         # Environment variables
-        (r'(ENV\[)[^\]]+\]', r'\1***'),
-
+        (r"(ENV\[)[^\]]+\]", r"\1***"),
         # IP addresses (partial masking)
-        (r'(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})', r'\1.***.***.\4'),
-        (r'(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})', r'\1.***.***.\4'),
+        (r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})", r"\1.***.***.\4"),
+        (r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})", r"\1.***.***.\4"),
     ]
 
     def __init__(self) -> None:
@@ -51,11 +45,9 @@ class ErrorSanitizer:
         for pattern, replacement in self.SENSITIVE_PATTERNS:
             # Use re.DOTALL for SSH key patterns to match across multiple lines
             flags = re.IGNORECASE
-            if r'PRIVATE\s+KEY-----' in pattern:
+            if r"PRIVATE\s+KEY-----" in pattern:
                 flags |= re.DOTALL
-            self._compiled_patterns.append(
-                (re.compile(pattern, flags=flags), replacement)
-            )
+            self._compiled_patterns.append((re.compile(pattern, flags=flags), replacement))
 
     def sanitize(self, message: str, context: dict[str, Any] | None = None) -> str:
         """
@@ -95,19 +87,21 @@ class ErrorSanitizer:
             Sanitized message with context information removed
         """
         # Remove parameter values from error messages
-        if 'parameters' in context:
+        if "parameters" in context:
             # Match parameters: followed by JSON-like structure
-            message = re.sub(r'parameters:\s*\{.*?\}', 'parameters: ***', message, flags=re.DOTALL)
+            message = re.sub(r"parameters:\s*\{.*?\}", "parameters: ***", message, flags=re.DOTALL)
 
         # Remove repo paths
-        if 'repo_path' in context and context['repo_path']:
-            path = str(context['repo_path'])
+        if "repo_path" in context and context["repo_path"]:
+            path = str(context["repo_path"])
             # Mask username in path if present
-            message = message.replace(path, '/****/')
+            message = message.replace(path, "/****/")
 
         return message
 
-    def sanitize_dict(self, data: dict[str, Any], keys_to_sanitize: list[str] | None = None) -> dict[str, Any]:
+    def sanitize_dict(
+        self, data: dict[str, Any], keys_to_sanitize: list[str] | None = None
+    ) -> dict[str, Any]:
         """
         Sanitize specific keys in a dictionary.
 
@@ -120,10 +114,17 @@ class ErrorSanitizer:
         """
         # Sensitive key patterns that should always be fully masked
         sensitive_key_patterns = [
-            'password', 'passwd', 'pwd',
-            'token', 'access_token', 'refresh_token',
-            'secret', 'api_key', 'apikey',
-            'private_key', 'ssh_key',
+            "password",
+            "passwd",
+            "pwd",
+            "token",
+            "access_token",
+            "refresh_token",
+            "secret",
+            "api_key",
+            "apikey",
+            "private_key",
+            "ssh_key",
         ]
 
         if keys_to_sanitize is None:
@@ -138,7 +139,7 @@ class ErrorSanitizer:
 
                 if is_sensitive_key:
                     # Fully mask sensitive key values
-                    result[key] = '***'
+                    result[key] = "***"
                 else:
                     # Apply normal sanitization for non-sensitive keys
                     result[key] = self.sanitize(value)

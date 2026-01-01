@@ -54,7 +54,9 @@ class WorkspaceOperations:
             "path": str(workspace.path),
             "created_at": workspace.created_at.isoformat(),
             "size_bytes": workspace.size_bytes,
-            "last_accessed_at": workspace.last_accessed_at.isoformat() if workspace.last_accessed_at else None,
+            "last_accessed_at": workspace.last_accessed_at.isoformat()
+            if workspace.last_accessed_at
+            else None,
         }
 
     async def release_workspace(self, workspace_id: UUID) -> bool:
@@ -86,7 +88,9 @@ class WorkspaceOperations:
                 "path": str(ws.path),
                 "created_at": ws.created_at.isoformat(),
                 "size_bytes": ws.size_bytes,
-                "last_accessed_at": ws.last_accessed_at.isoformat() if ws.last_accessed_at else None,
+                "last_accessed_at": ws.last_accessed_at.isoformat()
+                if ws.last_accessed_at
+                else None,
             }
             for ws in workspaces
         ]

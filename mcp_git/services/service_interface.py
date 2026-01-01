@@ -169,17 +169,23 @@ class MetricsServiceInterface(ABC):
     """Interface for metrics service."""
 
     @abstractmethod
-    async def record_metric(self, name: str, value: float, tags: dict[str, str] | None = None) -> None:
+    async def record_metric(
+        self, name: str, value: float, tags: dict[str, str] | None = None
+    ) -> None:
         """Record a metric."""
         pass
 
     @abstractmethod
-    async def get_metrics(self, name: str, time_range: tuple[float, float] | None = None) -> list[dict[str, Any]]:
+    async def get_metrics(
+        self, name: str, time_range: tuple[float, float] | None = None
+    ) -> list[dict[str, Any]]:
         """Get metrics."""
         pass
 
     @abstractmethod
-    async def increment_counter(self, name: str, value: float = 1.0, tags: dict[str, str] | None = None) -> None:
+    async def increment_counter(
+        self, name: str, value: float = 1.0, tags: dict[str, str] | None = None
+    ) -> None:
         """Increment a counter."""
         pass
 

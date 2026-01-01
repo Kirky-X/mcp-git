@@ -63,11 +63,13 @@ class TestBlameAdapter:
     @pytest.mark.asyncio
     async def test_blame_returns_lines(self, adapter, mock_repo):
         """Test that blame returns blame lines."""
+        from mcp_git.git.adapter import BlameOptions
+
         repo_path, _ = mock_repo
         test_file = repo_path / "test.txt"
 
-        # Call blame method
-        result = await adapter.blame(test_file)
+        # Call blame method with proper BlameOptions
+        result = await adapter.blame(BlameOptions(path=test_file))
 
         # Verify result structure
         assert isinstance(result, list)
@@ -75,10 +77,10 @@ class TestBlameAdapter:
     @pytest.mark.asyncio
     async def test_blame_with_line_range(self, adapter, mock_repo):
         """Test blame with specific line range."""
+        from mcp_git.git.adapter import BlameOptions
+
         repo_path, _ = mock_repo
         test_file = repo_path / "test.txt"
-
-        from mcp_git.git.adapter import BlameOptions
 
         options = BlameOptions(
             path=test_file,
@@ -86,29 +88,33 @@ class TestBlameAdapter:
             end_line=3,
         )
 
-        result = await adapter.blame(test_file, options=options)
+        result = await adapter.blame(options)
 
         assert isinstance(result, list)
 
     @pytest.mark.asyncio
     async def test_blame_nonexistent_file(self, adapter, temp_dir):
         """Test blame on non-existent file."""
+        from mcp_git.git.adapter import BlameOptions
+
         nonexistent = temp_dir / "nonexistent.txt"
 
         # Should raise an error or return empty list
         with pytest.raises(Exception):
-            await adapter.blame(nonexistent)
+            await adapter.blame(BlameOptions(path=nonexistent))
 
     @pytest.mark.asyncio
     async def test_blame_not_a_git_repo(self, adapter, temp_dir):
         """Test blame on directory that's not a git repository."""
+        from mcp_git.git.adapter import BlameOptions
+
         # Create a regular file
         test_file = temp_dir / "regular.txt"
         test_file.write_text("Some content\n")
 
         # Should raise an error
         with pytest.raises(Exception):
-            await adapter.blame(test_file)
+            await adapter.blame(BlameOptions(path=test_file))
 
 
 class TestBlameData:
@@ -116,35 +122,37 @@ class TestBlameData:
 
     def test_blame_line_structure(self):
         """Test BlameLine data structure."""
+        from datetime import datetime
+
         from mcp_git.storage.models import BlameLine
 
         blame_line = BlameLine(
             line_number=1,
-            commit_hash="abc123def456",
+            commit_oid="abc123def456",
             author="Test User",
-            author_email="test@example.com",
-            date="2024-01-01",
-            content="Sample line content",
+            date=datetime.now(),
+            summary="Test summary",
         )
 
         assert blame_line.line_number == 1
-        assert blame_line.commit_hash == "abc123def456"
+        assert blame_line.commit_oid == "abc123def456"
         assert blame_line.author == "Test User"
 
     def test_blame_line_optional_fields(self):
         """Test BlameLine with optional fields."""
+        from datetime import datetime
+
         from mcp_git.storage.models import BlameLine
 
         # Create with minimal fields
         blame_line = BlameLine(
             line_number=1,
-            commit_hash="abc123",
+            commit_oid="abc123",
             author="Test",
-            author_email="test@test.com",
-            date="2024-01-01",
-            content="Content",
+            date=datetime.now(),
+            summary="Test",
         )
 
         # All required fields should be set
         assert blame_line.line_number is not None
-        assert blame_line.commit_hash is not None
+        assert blame_line.commit_oid is not None

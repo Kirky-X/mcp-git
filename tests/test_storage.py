@@ -25,7 +25,7 @@ class TestSqliteStorage:
     @pytest.mark.asyncio
     async def test_initialize_storage(self, storage):
         """Test storage initialization."""
-        assert storage._connection is not None
+        assert storage._engine is not None
 
     @pytest.mark.asyncio
     async def test_create_task(self, storage):
@@ -313,16 +313,19 @@ class TestStorageIndexes:
     @pytest.mark.asyncio
     async def test_indexes_created(self, storage):
         """Test that indexes are created on initialization."""
-        # Query to check if indexes exist
-        cursor = await storage._connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='index'"
-        )
-        indexes = await cursor.fetchall()
-        index_names = [row[0] for row in indexes if row[0]]
+        from sqlalchemy import text
 
-        assert "idx_tasks_status" in index_names
-        assert "idx_tasks_created_at" in index_names
-        assert "idx_workspaces_last_accessed" in index_names
+        # Query to check if indexes exist using SQLAlchemy
+        async with storage._engine.connect() as conn:
+            result = await conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='index'")
+            )
+            indexes = result.fetchall()
+            index_names = [row[0] for row in indexes if row[0]]
+
+            assert "ix_tasks_status" in index_names
+            assert "ix_tasks_created_at" in index_names
+            assert "ix_workspaces_last_accessed_at" in index_names
 
 
 class TestStorageConcurrency:

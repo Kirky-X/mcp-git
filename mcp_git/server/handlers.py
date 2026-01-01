@@ -93,7 +93,6 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
         # Workspace operations
         if name == "git_allocate_workspace":
             result = await server.allocate_workspace()
-            return [TextContent(type="text", text=str(result))]
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
         elif name == "git_get_workspace":
@@ -487,18 +486,21 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
     except RepositoryNotFoundError as e:
         logger.error("Repository not found", error=str(e))
         from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+
         GIT_OPERATIONS_TOTAL.labels(operation=name, status="not_found").inc()
         return [TextContent(type="text", text=f"Error: Repository not found - {e.message}")]
 
     except AuthenticationError as e:
         logger.error("Authentication failed", error=str(e))
         from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+
         GIT_OPERATIONS_TOTAL.labels(operation=name, status="auth_failed").inc()
         return [TextContent(type="text", text=f"Error: Authentication failed - {e.message}")]
 
     except MergeConflictError as e:
         logger.error("Merge conflict", files=e.conflicted_files)
         from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+
         GIT_OPERATIONS_TOTAL.labels(operation=name, status="conflict").inc()
         return [
             TextContent(
@@ -509,6 +511,7 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
     except GitOperationError as e:
         logger.error("Git operation error", error=str(e))
         from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+
         GIT_OPERATIONS_TOTAL.labels(operation=name, status="error").inc()
         suggestion = f"\n\nSuggestion: {e.suggestion}" if e.suggestion else ""
         return [TextContent(type="text", text=f"Error: {e.message}{suggestion}")]
@@ -516,17 +519,20 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
     except McpGitError as e:
         logger.error("MCP Git error", error=str(e))
         from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+
         GIT_OPERATIONS_TOTAL.labels(operation=name, status="mcp_error").inc()
         return [TextContent(type="text", text=f"Error: {e.message}")]
 
     except ValueError as e:
         logger.error("Invalid argument", error=str(e))
         from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+
         GIT_OPERATIONS_TOTAL.labels(operation=name, status="invalid_arg").inc()
         return [TextContent(type="text", text=f"Invalid argument: {str(e)}")]
 
     except Exception as e:
         logger.error("Unexpected error", error=str(e))
         from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+
         GIT_OPERATIONS_TOTAL.labels(operation=name, status="unexpected").inc()
         return [TextContent(type="text", text=f"Unexpected error: {str(e)}")]

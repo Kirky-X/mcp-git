@@ -66,12 +66,16 @@ class CredentialManager:
     ENV_SSH_KEY = "SSH_KEY"  # nosec: B105 - Not a password, environment variable name
     ENV_SSH_PASSPHRASE = "SSH_PASSPHRASE"  # nosec: B105 - Not a password, environment variable name
 
-    def __init__(self, audit_log_path: Path | None = None) -> None:
+    # Credential TTL configuration (1 hour by default)
+    CREDENTIAL_TTL_SECONDS = 3600
+
+    def __init__(self, audit_log_path: Path | None = None, ttl_seconds: int | None = None) -> None:
         """
         Initialize the credential manager.
 
         Args:
             audit_log_path: Optional path to audit log file
+            ttl_seconds: Optional custom TTL for credentials (default: 3600s)
         """
         self._cached_credential: Credential | None = None
         self._credential_id: str | None = None
@@ -79,6 +83,7 @@ class CredentialManager:
         self._last_accessed: float | None = None
         self._access_count: int = 0
         self._audit_log_path = audit_log_path
+        self._ttl_seconds = ttl_seconds or self.CREDENTIAL_TTL_SECONDS
 
     def _log_audit_event(self, event_type: str, details: dict[str, Any]) -> None:
         """
@@ -104,8 +109,8 @@ class CredentialManager:
                 with open(self._audit_log_path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(event) + "\n")
             except (OSError, PermissionError) as e:
-                    logger.error(f"Failed to write to audit log: {e}")
-                    logger.debug(f"Audit log path: {self._audit_log_path}")
+                logger.error(f"Failed to write to audit log: {e}")
+                logger.debug(f"Audit log path: {self._audit_log_path}")
         # Log to application logger
         logger.info(f"Credential audit event: {event_type}", extra={"audit_event": event})
 
@@ -183,26 +188,49 @@ class CredentialManager:
 
     def get_credential(self, force_refresh: bool = False) -> Credential | None:
         """
-        Get credential, using cache if available.
+        Get credential, using cache if available and not expired.
 
         Args:
             force_refresh: Force reload from environment
 
         Returns:
-            Credential if found
+            Credential if found and not expired
         """
-        if force_refresh or self._cached_credential is None:
-            self._cached_credential = self.load_credential()
-            if self._cached_credential:
-                self._credential_id = str(uuid4())
-                self._created_at = time.time()
+        # Check if cached credential exists and is not expired
+        if not force_refresh and self._cached_credential is not None:
+            if self._is_credential_expired():
+                logger.info(
+                    "Credential expired, clearing cache",
+                    credential_age_seconds=self.get_credential_age(),
+                    ttl_seconds=self._ttl_seconds,
+                )
+                self.clear_credential()
+            else:
+                # Credential is valid, update access time
+                self._last_accessed = time.time()
+                self._access_count += 1
                 self._log_audit_event(
-                    "created",
+                    "accessed",
                     {
+                        "credential_id": self._credential_id,
+                        "access_count": self._access_count,
                         "auth_type": self._cached_credential.auth_type.value,
-                        "username": self._cached_credential.get_username(),
                     },
                 )
+                return self._cached_credential
+
+        # Load fresh credential
+        self._cached_credential = self.load_credential()
+        if self._cached_credential:
+            self._credential_id = str(uuid4())
+            self._created_at = time.time()
+            self._log_audit_event(
+                "created",
+                {
+                    "auth_type": self._cached_credential.auth_type.value,
+                    "username": self._cached_credential.get_username(),
+                },
+            )
 
         if self._cached_credential:
             self._last_accessed = time.time()
@@ -217,6 +245,19 @@ class CredentialManager:
             )
 
         return self._cached_credential
+
+    def _is_credential_expired(self) -> bool:
+        """
+        Check if the cached credential has expired.
+
+        Returns:
+            True if credential is expired, False otherwise
+        """
+        if self._created_at is None:
+            return True
+
+        age_seconds = time.time() - self._created_at
+        return age_seconds > self._ttl_seconds
 
     def set_credential(self, credential: Credential) -> None:
         """
@@ -324,7 +365,9 @@ class CredentialManager:
         """
         return {
             "credential_id": self._credential_id,
-            "auth_type": self._cached_credential.auth_type.value if self._cached_credential else None,
+            "auth_type": self._cached_credential.auth_type.value
+            if self._cached_credential
+            else None,
             "created_at": self._created_at,
             "last_accessed": self._last_accessed,
             "access_count": self._access_count,

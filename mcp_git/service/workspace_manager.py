@@ -268,24 +268,83 @@ class WorkspaceManager:
         # Calculate thresholds
         cutoff = datetime.now(UTC) - timedelta(seconds=self.config.retention_seconds)
 
+        logger.debug(f"Cleanup cutoff: {cutoff}, retention: {self.config.retention_seconds}s")
+        logger.debug(f"Found {len(workspaces)} workspaces to check")
+
+        # Filter expired workspaces
+        expired_workspaces = []
         for workspace in workspaces:
-            # Check if expired
-            if workspace.last_accessed_at and workspace.last_accessed_at < cutoff:
-                # Get size before deletion
-                size = await self._get_workspace_size(workspace)
+            if workspace.last_accessed_at:
+                # Make last_accessed_at timezone-aware if it isn't
+                access_time = workspace.last_accessed_at
+                if access_time.tzinfo is None:
+                    access_time = access_time.replace(tzinfo=UTC)
 
-                # Release workspace
-                await self.release_workspace(workspace.id)
+                logger.debug(
+                    f"Workspace {workspace.id}: access_time={access_time}, is_expired={access_time < cutoff}"
+                )
 
-                cleaned += 1
-                freed += size
+                if access_time < cutoff:
+                    expired_workspaces.append(workspace)
 
-        if cleaned > 0:
+        # Batch cleanup with concurrency
+        if expired_workspaces:
+            cleaned, freed = await self._cleanup_workspaces_batch(expired_workspaces)
             logger.info(
                 "Cleaned up expired workspaces",
                 count=cleaned,
                 freed_bytes=freed,
             )
+
+        return cleaned, freed
+
+    async def _cleanup_workspaces_batch(
+        self, workspaces: list[Workspace], batch_size: int = 10
+    ) -> tuple[int, int]:
+        """
+        Clean up a batch of workspaces concurrently.
+
+        Args:
+            workspaces: List of workspaces to clean up
+            batch_size: Number of concurrent cleanups
+
+        Returns:
+            Tuple of (cleaned_count, freed_bytes)
+        """
+        cleaned = 0
+        freed = 0
+
+        # Process in batches to avoid overwhelming the system
+        for i in range(0, len(workspaces), batch_size):
+            batch = workspaces[i : i + batch_size]
+
+            # Get sizes before deletion
+            size_tasks = [self._get_workspace_size(ws) for ws in batch]
+            size_results = await asyncio.gather(*size_tasks, return_exceptions=True)
+
+            # Filter out errors and get valid sizes
+            valid_indices: list[int] = []
+            valid_sizes: list[int] = []
+
+            for idx, size_result in enumerate(size_results):
+                if not isinstance(size_result, Exception):
+                    valid_indices.append(idx)
+                    # Type assertion: we know size_result is int here
+                    valid_sizes.append(int(size_result))  # type: ignore[arg-type]
+
+            # Create cleanup tasks for workspaces with valid sizes
+            cleanup_tasks = [self.release_workspace(batch[idx].id) for idx in valid_indices]
+
+            # Execute cleanups concurrently
+            results = await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+
+            # Count successful cleanups
+            for result, size in zip(results, valid_sizes, strict=True):
+                if not isinstance(result, Exception):
+                    cleaned += 1
+                    freed += size
+                else:
+                    logger.warning(f"Failed to cleanup workspace: {result}")
 
         return cleaned, freed
 
@@ -497,21 +556,50 @@ class WorkspaceManager:
         """
         Validate that a path is within the workspace root.
 
-        This prevents path traversal attacks.
+        This prevents path traversal attacks by checking:
+        1. Path doesn't contain ".." sequences
+        2. Resolved path is within workspace root
+        3. Symbolic links don't escape the root
 
         Args:
             path: Path to validate
 
         Returns:
-            True if path is valid
+            True if path is valid, False otherwise
         """
         try:
-            # Resolve to absolute path
+            # Convert to Path if string
+            if isinstance(path, str):
+                path = Path(path)
+
+            # Check for path traversal patterns
+            path_str = str(path)
+            if ".." in path_str:
+                # Check if ".." is part of a legitimate path (like "../sibling")
+                # or a traversal attempt
+                parts = Path(path_str).parts
+                if ".." in parts:
+                    logger.warning(
+                        f"Path traversal attempt detected: {path_str}. "
+                        "Relative paths with '..' are not allowed."
+                    )
+                    return False
+
+            # Resolve to absolute path (follows symlinks)
             resolved = path.resolve()
 
             # Check if it's within the workspace root
-            return resolved.is_relative_to(self.config.root_path)
-        except (ValueError, OSError):
+            root_resolved = self.config.root_path.resolve()
+            if not resolved.is_relative_to(root_resolved):
+                logger.warning(
+                    f"Path traversal attempt detected: {path_str} "
+                    f"resolves outside workspace root: {resolved}"
+                )
+                return False
+
+            return True
+        except (ValueError, OSError) as e:
+            logger.warning(f"Path validation failed for {path}: {e}")
             return False
 
     def get_disk_space_info(self) -> dict:

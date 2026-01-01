@@ -42,9 +42,7 @@ class BranchOperations:
         Returns:
             List of branch information
         """
-        branches = await self.adapter.list_branches(
-            repo_path, local=local, remote=remote, all=all
-        )
+        branches = await self.adapter.list_branches(repo_path, local=local, remote=remote, all=all)
         return [
             {
                 "name": branch.name,
@@ -56,9 +54,7 @@ class BranchOperations:
             for branch in branches
         ]
 
-    async def create_branch(
-        self, repo_path: Path, name: str, revision: str | None = None
-    ) -> str:
+    async def create_branch(self, repo_path: Path, name: str, revision: str | None = None) -> str:
         """
         Create a new branch.
 
@@ -75,9 +71,7 @@ class BranchOperations:
         logger.info(f"Created branch {sanitized_name} in {repo_path}")
         return sanitized_name
 
-    async def delete_branch(
-        self, repo_path: Path, name: str, force: bool = False
-    ) -> None:
+    async def delete_branch(self, repo_path: Path, name: str, force: bool = False) -> None:
         """
         Delete a branch.
 

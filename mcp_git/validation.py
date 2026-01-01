@@ -51,7 +51,9 @@ def validate_args(schema: type[BaseModel]) -> Callable[[Callable[..., Any]], Cal
     return decorator
 
 
-def validate_length(field_name: str, max_length: int) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def validate_length(
+    field_name: str, max_length: int
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator to validate that a string field does not exceed maximum length.
 
@@ -68,9 +70,7 @@ def validate_length(field_name: str, max_length: int) -> Callable[[Callable[...,
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             value = kwargs.get(field_name)
             if value and isinstance(value, str) and len(value) > max_length:
-                raise ValueError(
-                    f"{field_name} exceeds maximum length of {max_length} characters"
-                )
+                raise ValueError(f"{field_name} exceeds maximum length of {max_length} characters")
             return await func(*args, **kwargs)
 
         return wrapper

@@ -11,7 +11,9 @@ from typing import Any
 from loguru import logger
 
 # Context variable for current span
-current_span: contextvars.ContextVar["Span | None"] = contextvars.ContextVar("current_span", default=None)
+current_span: contextvars.ContextVar["Span | None"] = contextvars.ContextVar(
+    "current_span", default=None
+)
 
 
 @dataclass

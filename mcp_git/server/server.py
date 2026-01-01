@@ -99,9 +99,12 @@ class McpGitServer:
             # Start metrics server
             from mcp_git.metrics import start_metrics_server
 
-            metrics_port = 9090
-            start_metrics_server(metrics_port)
-            logger.info(f"Metrics server started on port {metrics_port}")
+            metrics_port = self.config.metrics_port or 9090
+            try:
+                start_metrics_server(metrics_port)
+                logger.info(f"Metrics server started on port {metrics_port}")
+            except OSError as e:
+                logger.warning(f"Failed to start metrics server on port {metrics_port}: {e}")
 
             logger.info("MCP server initialized")
         except Exception as e:

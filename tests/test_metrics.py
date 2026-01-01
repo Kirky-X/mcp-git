@@ -4,19 +4,20 @@ Tests for metrics module.
 Tests for Prometheus metrics collection, recording, and decorators.
 """
 
-import pytest
 import time
 from unittest.mock import patch
 
+import pytest
+
 from mcp_git.metrics import (
-    TASKS_TOTAL,
-    TASK_DURATION,
     ACTIVE_TASKS,
     QUEUED_TASKS,
-    MetricsCollector,
-    track_duration,
+    TASK_DURATION,
+    TASKS_TOTAL,
     Cache,
+    MetricsCollector,
     start_metrics_server,
+    track_duration,
 )
 
 
@@ -115,13 +116,13 @@ class TestCache:
 class TestStartMetricsServer:
     """Test start_metrics_server function."""
 
-    @patch('mcp_git.metrics.start_http_server')
+    @patch("mcp_git.metrics.start_http_server")
     def test_start_metrics_server_default_port(self, mock_start):
         """Test starting metrics server with default port."""
         start_metrics_server()
         mock_start.assert_called_once_with(9090)
 
-    @patch('mcp_git.metrics.start_http_server')
+    @patch("mcp_git.metrics.start_http_server")
     def test_start_metrics_server_custom_port(self, mock_start):
         """Test starting metrics server with custom port."""
         start_metrics_server(port=8080)

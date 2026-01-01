@@ -4,6 +4,10 @@ Version: 0.1.0
 Summary: Git operations MCP server for AI Agents
 Author: Kirky.X
 License: MIT
+Project-URL: Homepage, https://github.com/Kirky-X/mcp-git
+Project-URL: Documentation, https://mcp-git.readthedocs.io
+Project-URL: Repository, https://github.com/Kirky-X/mcp-git
+Project-URL: Bug Tracker, https://github.com/Kirky-X/mcp-git/issues
 Keywords: git,mcp,ai-agent,model-context-protocol
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers
@@ -22,17 +26,29 @@ Requires-Dist: asyncio-throttle>=1.0.2
 Requires-Dist: aiosqlite>=0.19.0
 Requires-Dist: pydantic>=2.5.0
 Requires-Dist: python-dotenv>=1.0.0
-Requires-Dist: secrecy>=1.2.0
 Requires-Dist: loguru>=0.7.0
 Requires-Dist: uuid6>=2024.1.12
+Requires-Dist: moka-py>=0.2.4
 Provides-Extra: dev
 Requires-Dist: pytest>=7.4.0; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
 Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
-Requires-Dist: black>=23.0.0; extra == "dev"
 Requires-Dist: ruff>=0.1.0; extra == "dev"
 Requires-Dist: mypy>=1.7.0; extra == "dev"
 Requires-Dist: pre-commit>=3.6.0; extra == "dev"
+Provides-Extra: test
+Requires-Dist: pytest>=7.4.0; extra == "test"
+Requires-Dist: pytest-cov>=4.1.0; extra == "test"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "test"
+Requires-Dist: coverage[toml]>=7.3.0; extra == "test"
+Provides-Extra: docs
+Requires-Dist: sphinx>=7.2.0; extra == "docs"
+Requires-Dist: sphinx-rtd-theme>=1.3.0; extra == "docs"
+Requires-Dist: sphinx-autodoc-typehints>=1.24.0; extra == "docs"
+Provides-Extra: security
+Requires-Dist: safety>=2.3.0; extra == "security"
+Requires-Dist: bandit>=1.7.0; extra == "security"
+Requires-Dist: pip-audit>=2.6.0; extra == "security"
 
 # mcp-git
 
@@ -292,6 +308,24 @@ Add to your `CLAUDE.md` or MCP configuration:
 - `git_add_remote`: Add a remote
 - `git_remove_remote`: Remove a remote
 
+#### Git LFS Operations
+
+- `git_lfs_init`: Initialize Git LFS in a repository
+- `git_lfs_track`: Track files with Git LFS
+- `git_lfs_untrack`: Stop tracking files with Git LFS
+- `git_lfs_status`: Show Git LFS status and tracked files
+- `git_lfs_pull`: Download LFS files from remote
+- `git_lfs_push`: Push LFS objects to remote
+- `git_lfs_fetch`: Fetch LFS objects from remote
+- `git_lfs_install`: Install Git LFS hooks
+
+#### Submodule Operations
+
+- `git_submodule_add`: Add a submodule to the repository
+- `git_submodule_update`: Update submodules to their latest state
+- `git_submodule_deinit`: Deinitialize a submodule
+- `git_submodule_list`: List all submodules
+
 #### Task Operations
 
 - `git_get_task`: Get task information
@@ -442,7 +476,7 @@ mcp-git/
 
 ## Security Considerations
 
-- Credentials are stored securely using the `secrecy` library
+- Credentials are stored securely using `pydantic.SecretStr`
 - Workspace paths are validated to prevent path traversal attacks
 - Git operations run in isolated workspaces
 - Task timeouts prevent hanging operations

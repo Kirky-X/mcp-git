@@ -3,11 +3,12 @@ Tests for cache module.
 """
 
 import asyncio
-from datetime import UTC,  datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
 import pytest
 
-from mcp_git.cache import RepoMetadata, RepoMetadataCache, CacheManager
+from mcp_git.cache import CacheManager, RepoMetadata, RepoMetadataCache
 
 
 class TestRepoMetadata:

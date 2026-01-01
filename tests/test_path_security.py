@@ -26,7 +26,7 @@ class TestPathTraversalPrevention:
         from mcp_git.utils import sanitize_path
 
         attack_path = Path("../../../etc/passwd")
-        with pytest.raises(ValueError, match="traverse|outside"):
+        with pytest.raises(ValueError, match="Path traversal attempt detected"):
             sanitize_path(attack_path, workspace_root)
 
     def test_nested_traversal_attempt(self, workspace_root):

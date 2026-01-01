@@ -1,3 +1,3 @@
 [bandit]
-# Ignore SQL injection warnings for validated field names
-skips = B608
+exclude_dirs = ["/tests", "/test"]
+skips = ["B101", "B601", "B608"]

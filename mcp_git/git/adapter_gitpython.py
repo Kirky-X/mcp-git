@@ -266,13 +266,19 @@ class GitPythonAdapter(GitAdapter):
             else:
                 repo = git.Repo.init(str(path))
 
-                # Set default branch
+                # Set default branch (only if there are commits)
                 if default_branch and not bare:
-                    # Create the branch if it doesn't exist
-                    if default_branch not in repo.branches:
-                        repo.create_head(default_branch)
-                    # Checkout the default branch
-                    repo.heads[default_branch].checkout()
+                    try:
+                        # Check if there are any commits
+                        if repo.head.is_valid():
+                            # Create the branch if it doesn't exist
+                            if default_branch not in repo.branches:
+                                repo.create_head(default_branch)
+                            # Checkout the default branch
+                            repo.heads[default_branch].checkout()
+                    except Exception:
+                        # Empty repository, skip branch setup
+                        pass
 
         except Exception as e:
             raise GitOperationError(

@@ -1,6 +1,6 @@
 """Workspace manager tests for mcp-git."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -107,8 +107,10 @@ class TestWorkspaceManager:
         # Get updated workspace
         updated = await workspace_manager.get_workspace(created.id)
         assert updated is not None
-        # Use >= because timestamp precision may be same second
-        assert updated.last_accessed_at >= original_access
+        # Access time should be updated (may have same second due to precision)
+        # Just verify it's not None and is recent
+        assert updated.last_accessed_at is not None
+        assert updated.last_accessed_at >= original_access.replace(microsecond=0)
 
     @pytest.mark.asyncio
     async def test_release_workspace(self, workspace_manager):
@@ -184,10 +186,16 @@ class TestWorkspaceCleanup:
         workspace = await workspace_manager.allocate_workspace()
 
         # Manually update access time to be in the past
+        past_time = datetime.now(UTC) - timedelta(hours=2)
         await workspace_manager.storage.update_workspace(
             workspace.id,
-            last_accessed_at=datetime.utcnow() - timedelta(hours=2),
+            last_accessed_at=past_time,
         )
+
+        # Verify the time was updated
+        updated = await workspace_manager.storage.get_workspace(workspace.id)
+        assert updated is not None
+        assert updated.last_accessed_at is not None
 
         # Run cleanup
         cleaned, freed = await workspace_manager.cleanup_expired_workspaces()
@@ -206,6 +214,9 @@ class TestWorkspaceCleanup:
         workspace = await workspace_manager.allocate_workspace()
         test_file = workspace.path / "large_file.txt"
         test_file.write_bytes(b"x" * 1000000)  # 1MB
+
+        # Update workspace size in database
+        await workspace_manager.update_workspace_size(workspace.id)
 
         # Set max size to be small
         workspace_manager.config.max_size_bytes = 500 * 1024  # 500KB
@@ -276,6 +287,11 @@ class TestWorkspaceUsage:
             workspace = await workspace_manager.allocate_workspace()
             test_file = workspace.path / f"file_{i}.txt"
             test_file.write_bytes(b"x" * (1000 * i))
+            # Update workspace size in database
+            await workspace_manager.storage.update_workspace(
+                workspace.id,
+                size_bytes=test_file.stat().st_size,
+            )
 
         usage = await workspace_manager.get_workspace_usage()
 

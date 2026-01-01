@@ -107,3 +107,11 @@ IFLOW.md
 
 # Project Specific
 /tmp/mcp-git/
+
+# Documentation (local only)
+docs/git.md
+docs/task.md
+docs/prd.md
+docs/tdd.md
+docs/uat.md
+docs/test.md

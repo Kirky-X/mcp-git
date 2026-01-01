@@ -268,6 +268,7 @@ class TestRealWorldPerformance:
     def temp_dir(self):
         """Create a temporary directory for tests."""
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
 
@@ -275,12 +276,14 @@ class TestRealWorldPerformance:
     def adapter(self):
         """Create a GitPython adapter."""
         from mcp_git.git.adapter_gitpython import GitPythonAdapter
+
         return GitPythonAdapter()
 
     @pytest.mark.asyncio
     async def test_clone_and_basic_operations(self, temp_dir, adapter):
         """Test complete workflow: clone, branch, commit, log."""
         import git
+
         from mcp_git.git.adapter import CheckoutOptions, CommitOptions
 
         # Create a local test repo
@@ -326,6 +329,7 @@ class TestRealWorldPerformance:
     async def test_many_files_operations(self, temp_dir, adapter):
         """Test operations with repositories containing many files."""
         import git
+
         from mcp_git.git.adapter import CommitOptions
 
         # Create repo with many files
@@ -376,6 +380,7 @@ class TestRealWorldPerformance:
     async def test_concurrent_operations_performance(self, temp_dir, adapter):
         """Test performance of concurrent Git operations."""
         import git
+
         from mcp_git.git.adapter import CheckoutOptions, CommitOptions
 
         # Create multiple repos for concurrent operations
@@ -394,18 +399,14 @@ class TestRealWorldPerformance:
         tasks = []
         for i, (repo_path, _) in enumerate(repos):
             # Create a branch and commit
-            tasks.append(
-                adapter.create_branch(repo_path, f"concurrent-branch-{i}")
-            )
+            tasks.append(adapter.create_branch(repo_path, f"concurrent-branch-{i}"))
             tasks.append(
                 adapter.checkout(
                     repo_path,
                     CheckoutOptions(branch=f"concurrent-branch-{i}", force=True),
                 )
             )
-            tasks.append(
-                adapter.add(repo_path, ["README.md"])
-            )
+            tasks.append(adapter.add(repo_path, ["README.md"]))
             tasks.append(
                 adapter.commit(
                     repo_path,

@@ -242,6 +242,14 @@ class TestGitPythonAdapter:
         # Create and configure repo
         repo_path = temp_dir / "test_repo"
         repo = git.Repo.init(str(repo_path))
+
+        # Create a file and commit
+        test_file = repo_path / "test.txt"
+        test_file.write_text("test content")
+        repo.index.add(["test.txt"])
+        commit = repo.index.commit("Initial commit")
+
+        # Create and checkout develop branch
         repo.create_head("develop")
         repo.heads.develop.checkout()
 
@@ -257,11 +265,18 @@ class TestGitPythonAdapter:
 
         from mcp_git.git.adapter_gitpython import GitPythonAdapter
 
-        # Create and configure repo
+        # Create and configure repo with a commit
         repo_path = temp_dir / "test_repo"
         repo = git.Repo.init(str(repo_path))
-        commit = repo.create_head("main").commit
-        repo.head.reference = commit  # Detach HEAD
+
+        # Create a file and commit
+        test_file = repo_path / "test.txt"
+        test_file.write_text("test content")
+        repo.index.add(["test.txt"])
+        commit = repo.index.commit("Initial commit")
+
+        # Detach HEAD by checking out the commit directly
+        repo.head.reference = commit
 
         adapter = GitPythonAdapter()
         branch = await adapter.get_current_branch(repo_path)
@@ -317,36 +332,49 @@ class TestGitPythonAdapter:
     @pytest.mark.asyncio
     async def test_is_merged(self, temp_dir: Path):
         """Test checking if branch is merged."""
+        import subprocess
+
         import git
 
         from mcp_git.git.adapter_gitpython import GitPythonAdapter
 
-        # Create and configure repo
+        # Create and configure repo with initial commit
         repo_path = temp_dir / "test_repo"
         repo = git.Repo.init(str(repo_path))
 
-        # Create feature branch and make a commit
-        feature = repo.create_head("feature")
-        repo.head.reference = feature.commit
+        # Create initial commit on main (or master)
+        main_file = repo_path / "main.txt"
+        main_file.write_text("main content")
+        repo.index.add(["main.txt"])
+        initial_commit = repo.index.commit("Initial commit")
+
+        # Get the actual default branch name
+        default_branch = "master" if "master" in repo.heads else "main"
+
+        # Create feature branch and make another commit
+        repo.create_head("feature")
+        repo.heads.feature.checkout()
         test_file = repo_path / "feature.txt"
         test_file.write_text("Feature")
         repo.index.add(["feature.txt"])
         feature_commit = repo.index.commit("Feature commit")
 
-        # Switch back to main
-        repo.heads.main.checkout()
+        # Switch back to default branch
+        repo.heads[default_branch].checkout()
 
         adapter = GitPythonAdapter()
 
         # Feature is not yet merged
-        is_merged = await adapter.is_merged(repo_path, "feature", "main")
+        is_merged = await adapter.is_merged(repo_path, "feature", default_branch)
         assert is_merged is False
 
-        # Merge feature into main
-        repo.index.merge_tree(feature_commit)
-        repo.index.commit("Merge feature")
+        # Merge feature into default_branch using git command
+        subprocess.run(
+            ["git", "-C", str(repo_path), "merge", "--no-ff", "-m", "Merge feature", "feature"],
+            check=True,
+        )
 
-        is_merged = await adapter.is_merged(repo_path, "feature", "main")
+        is_merged = await adapter.is_merged(repo_path, "feature", default_branch)
         assert is_merged is True
 
 

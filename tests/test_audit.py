@@ -14,9 +14,9 @@ from mcp_git.audit import (
     AuditEventType,
     AuditLogger,
     AuditSeverity,
+    audit_logger,
     log_git_operation,
     log_security_event,
-    audit_logger,
 )
 
 
@@ -140,9 +140,15 @@ class TestAuditLogger:
         logger = AuditLogger()
 
         # Log different event types
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO))
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_PUSH, severity=AuditSeverity.INFO))
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO))
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_PUSH, severity=AuditSeverity.INFO)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO)
+        )
 
         events = logger.query_events(event_type=AuditEventType.GIT_CLONE)
 
@@ -154,9 +160,15 @@ class TestAuditLogger:
         """Test querying events by severity."""
         logger = AuditLogger()
 
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO))
-        logger.log_event(AuditEvent(event_type=AuditEventType.AUTH_FAILED, severity=AuditSeverity.ERROR))
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.WARNING))
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.AUTH_FAILED, severity=AuditSeverity.ERROR)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.WARNING)
+        )
 
         events = logger.query_events(severity=AuditSeverity.ERROR)
 
@@ -168,13 +180,19 @@ class TestAuditLogger:
         logger = AuditLogger()
 
         logger.log_event(
-            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO, user_id="user1")
+            AuditEvent(
+                event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO, user_id="user1"
+            )
         )
         logger.log_event(
-            AuditEvent(event_type=AuditEventType.GIT_PUSH, severity=AuditSeverity.INFO, user_id="user2")
+            AuditEvent(
+                event_type=AuditEventType.GIT_PUSH, severity=AuditSeverity.INFO, user_id="user2"
+            )
         )
         logger.log_event(
-            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO, user_id="user1")
+            AuditEvent(
+                event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO, user_id="user1"
+            )
         )
 
         events = logger.query_events(user_id="user1")
@@ -196,7 +214,9 @@ class TestAuditLogger:
         logger._in_memory_events.append(old_event.to_dict())
 
         # Log current event
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_PUSH, severity=AuditSeverity.INFO))
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_PUSH, severity=AuditSeverity.INFO)
+        )
 
         # Query events from last 30 minutes
         start_time = now - timedelta(minutes=30)
@@ -243,9 +263,15 @@ class TestAuditLogger:
         """Test getting security events."""
         logger = AuditLogger()
 
-        logger.log_event(AuditEvent(event_type=AuditEventType.AUTH_FAILED, severity=AuditSeverity.ERROR))
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO))
-        logger.log_event(AuditEvent(event_type=AuditEventType.PERMISSION_DENIED, severity=AuditSeverity.ERROR))
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.AUTH_FAILED, severity=AuditSeverity.ERROR)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.PERMISSION_DENIED, severity=AuditSeverity.ERROR)
+        )
 
         security_events = logger.get_security_events(hours=24)
 
@@ -258,10 +284,18 @@ class TestAuditLogger:
         """Test getting audit statistics."""
         logger = AuditLogger()
 
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO))
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO))
-        logger.log_event(AuditEvent(event_type=AuditEventType.GIT_PUSH, severity=AuditSeverity.WARNING))
-        logger.log_event(AuditEvent(event_type=AuditEventType.AUTH_FAILED, severity=AuditSeverity.ERROR))
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_CLONE, severity=AuditSeverity.INFO)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.GIT_PUSH, severity=AuditSeverity.WARNING)
+        )
+        logger.log_event(
+            AuditEvent(event_type=AuditEventType.AUTH_FAILED, severity=AuditSeverity.ERROR)
+        )
 
         stats = logger.get_statistics()
 
@@ -296,6 +330,7 @@ class TestLogGitOperation:
 
             # Replace global audit logger
             import mcp_git.audit as audit_module
+
             original_logger = audit_module.audit_logger
             audit_module.audit_logger = logger
 
@@ -325,6 +360,7 @@ class TestLogGitOperation:
             logger = AuditLogger(log_path=log_path)
 
             import mcp_git.audit as audit_module
+
             original_logger = audit_module.audit_logger
             audit_module.audit_logger = logger
 
@@ -352,6 +388,7 @@ class TestLogGitOperation:
             logger = AuditLogger(log_path=log_path)
 
             import mcp_git.audit as audit_module
+
             original_logger = audit_module.audit_logger
             audit_module.audit_logger = logger
 
@@ -381,6 +418,7 @@ class TestLogSecurityEvent:
             logger = AuditLogger(log_path=log_path)
 
             import mcp_git.audit as audit_module
+
             original_logger = audit_module.audit_logger
             audit_module.audit_logger = logger
 
@@ -408,6 +446,7 @@ class TestLogSecurityEvent:
             logger = AuditLogger(log_path=log_path)
 
             import mcp_git.audit as audit_module
+
             original_logger = audit_module.audit_logger
             audit_module.audit_logger = logger
 

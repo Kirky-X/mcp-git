@@ -81,7 +81,9 @@ class DatabaseConfig(BaseModel):
     path: Path = Field(
         default_factory=lambda: Path(tempfile.gettempdir()) / "mcp-git" / "database" / "mcp-git.db"
     )
-    max_size_bytes: int = Field(default=100 * 1024 * 1024, gt=0, le=10 * 1024 * 1024 * 1024)  # 100MB to 10GB
+    max_size_bytes: int = Field(
+        default=100 * 1024 * 1024, gt=0, le=10 * 1024 * 1024 * 1024
+    )  # 100MB to 10GB
     task_retention_seconds: int = Field(default=3600, gt=0, le=86400)  # 1 hour to 24 hours
 
     @field_validator("path")
@@ -96,9 +98,7 @@ class DatabaseConfig(BaseModel):
             try:
                 parent.mkdir(parents=True, exist_ok=True)
             except (OSError, PermissionError) as e:
-                raise ValueError(
-                    f"Cannot create database directory '{parent}'. Error: {e}"
-                ) from e
+                raise ValueError(f"Cannot create database directory '{parent}'. Error: {e}") from e
 
         return resolved
 
@@ -106,7 +106,7 @@ class DatabaseConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Server configuration."""
 
-    host: str = Field(default="127.0.0.1", pattern=r'^[a-zA-Z0-9\.\-]+$')
+    host: str = Field(default="127.0.0.1", pattern=r"^[a-zA-Z0-9\.\-]+$")
     port: int = Field(default=3001, ge=1, le=65535)
     transport: TransportType = TransportType.STDIO
 
@@ -129,6 +129,9 @@ class Config(BaseModel):
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
+
+    # Metrics configuration
+    metrics_port: int | None = Field(default=None, ge=1, le=65535)
 
     # Git configuration - use SecretStr for sensitive data
     git_token: SecretStr | None = Field(default=None, exclude=True)

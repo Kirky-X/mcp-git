@@ -4,29 +4,31 @@
 验证所有 48 个 MCP 工具的功能正确性
 """
 
-import sys
-import os
 import asyncio
+import os
+import sys
 import time
-from pathlib import Path
-from typing import Dict, List, Any
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List
 
 # 添加项目根目录到 Python 路径
 PROJECT_ROOT = Path("/home/project/mcp-git")
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from mcp_git.git.adapter import CheckoutOptions, CloneOptions, CommitOptions
 from mcp_git.service.facade import GitServiceFacade
 from mcp_git.service.workspace_manager import WorkspaceManager
-from mcp_git.storage.models import TaskStatus, GitOperation
-from mcp_git.git.adapter import CloneOptions, CommitOptions, CheckoutOptions
+from mcp_git.storage.models import GitOperation, TaskStatus
+
 
 # 颜色定义
 class Colors:
-    GREEN = '\033[0;32m'
-    RED = '\033[0;31m'
-    YELLOW = '\033[1;33m'
-    NC = '\033[0m'
+    GREEN = "\033[0;32m"
+    RED = "\033[0;31m"
+    YELLOW = "\033[1;33m"
+    NC = "\033[0m"
+
 
 @dataclass
 class TestResult:
@@ -35,6 +37,7 @@ class TestResult:
     duration: float
     error: str = ""
 
+
 class APIValidator:
     def __init__(self):
         self.results: List[TestResult] = []
@@ -42,9 +45,9 @@ class APIValidator:
         self.workspace_id = None
 
     def print_header(self, title: str):
-        print(f"\n{Colors.GREEN}{'='*40}{Colors.GREEN}")
+        print(f"\n{Colors.GREEN}{'=' * 40}{Colors.GREEN}")
         print(f"{Colors.GREEN}{title}{Colors.GREEN}")
-        print(f"{Colors.GREEN}{'='*40}{Colors.GREEN}\n")
+        print(f"{Colors.GREEN}{'=' * 40}{Colors.GREEN}\n")
 
     def print_test(self, name: str):
         print(f"{Colors.YELLOW}[TEST]{Colors.GREEN} {name}")
@@ -64,6 +67,7 @@ class APIValidator:
         try:
             # 创建存储
             from mcp_git.storage import SqliteStorage
+
             storage = SqliteStorage(database_path=":memory:")
             await storage.initialize()
 
@@ -214,10 +218,7 @@ class APIValidator:
         self.print_test("git_commit")
         start = time.time()
         try:
-            result = await self.facade.commit(
-                self.workspace_id,
-                "Test commit from API validator"
-            )
+            result = await self.facade.commit(self.workspace_id, "Test commit from API validator")
             duration = time.time() - start
             self.print_pass("git_commit", duration)
         except Exception as e:
@@ -232,11 +233,7 @@ class APIValidator:
         self.print_test("git_create_branch")
         start = time.time()
         try:
-            await self.facade.create_branch(
-                self.workspace_id,
-                "test-feature",
-                revision="master"
-            )
+            await self.facade.create_branch(self.workspace_id, "test-feature", revision="master")
             duration = time.time() - start
             self.print_pass("git_create_branch", duration)
         except Exception as e:
@@ -248,10 +245,7 @@ class APIValidator:
         start = time.time()
         try:
             result = await self.facade.list_branches(
-                self.workspace_id,
-                local=True,
-                remote=False,
-                all=False
+                self.workspace_id, local=True, remote=False, all=False
             )
             duration = time.time() - start
             self.print_pass("git_list_branches", duration)
@@ -264,10 +258,7 @@ class APIValidator:
         start = time.time()
         try:
             await self.facade.checkout(
-                self.workspace_id,
-                "test-feature",
-                create_new=False,
-                force=False
+                self.workspace_id, "test-feature", create_new=False, force=False
             )
             duration = time.time() - start
             self.print_pass("git_checkout", duration)
@@ -281,10 +272,7 @@ class APIValidator:
         try:
             await self.facade.checkout(self.workspace_id, "master", False, False)
             await self.facade.delete_branch(
-                self.workspace_id,
-                "test-feature",
-                force=False,
-                remote=False
+                self.workspace_id, "test-feature", force=False, remote=False
             )
             duration = time.time() - start
             self.print_pass("git_delete_branch", duration)
@@ -334,10 +322,7 @@ class APIValidator:
         start = time.time()
         try:
             result = await self.facade.blame(
-                self.workspace_id,
-                "test.txt",
-                start_line=1,
-                end_line=1
+                self.workspace_id, "test.txt", start_line=1, end_line=1
             )
             duration = time.time() - start
             self.print_pass("git_blame", duration)
@@ -354,10 +339,7 @@ class APIValidator:
         start = time.time()
         try:
             await self.facade.create_tag(
-                self.workspace_id,
-                "v1.0.0",
-                message="Test tag",
-                force=False
+                self.workspace_id, "v1.0.0", message="Test tag", force=False
             )
             duration = time.time() - start
             self.print_pass("git_create_tag", duration)
@@ -392,8 +374,9 @@ class APIValidator:
         self.print_header("远程操作测试")
 
         # Setup: 创建本地 bare 仓库
-        import git
         import shutil
+
+        import git
 
         temp_dir = Path("/tmp/test-api-remote")
         temp_dir.mkdir(exist_ok=True)
@@ -404,7 +387,7 @@ class APIValidator:
 
         workspace = await self.facade.get_workspace(self.workspace_id)
         repo = git.Repo(str(workspace["path"]))
-        
+
         # 添加 remote
         if "origin" not in [r.name for r in repo.remotes]:
             repo.create_remote("origin", bare_path)
@@ -418,7 +401,7 @@ class APIValidator:
             test_file.write_text("push test content")
             await self.facade.add(self.workspace_id, ["push_test.txt"])
             await self.facade.commit(self.workspace_id, "Push test commit")
-            
+
             await self.facade.push(self.workspace_id, remote="origin", branch="master")
             duration = time.time() - start
             self.print_pass("git_push", duration)
@@ -456,11 +439,7 @@ class APIValidator:
         self.print_test("git_add_remote")
         start = time.time()
         try:
-            await self.facade.add_remote(
-                self.workspace_id,
-                "test_remote",
-                "/tmp/test-remote.git"
-            )
+            await self.facade.add_remote(self.workspace_id, "test_remote", "/tmp/test-remote.git")
             duration = time.time() - start
             self.print_pass("git_add_remote", duration)
         except Exception as e:
@@ -508,7 +487,7 @@ class APIValidator:
                 apply=False,
                 drop=False,
                 message="Test stash",
-                include_untracked=False
+                include_untracked=False,
             )
             duration = time.time() - start
             self.print_pass("git_stash", duration)
@@ -535,10 +514,7 @@ class APIValidator:
         self.print_test("创建测试分支")
         try:
             await self.facade.create_branch(
-                self.workspace_id,
-                "test-merge-branch",
-                revision="master",
-                force=False
+                self.workspace_id, "test-merge-branch", revision="master", force=False
             )
         except Exception as e:
             pass
@@ -548,9 +524,7 @@ class APIValidator:
         start = time.time()
         try:
             result = await self.facade.merge(
-                self.workspace_id,
-                source_branch="test-merge-branch",
-                fast_forward=True
+                self.workspace_id, source_branch="test-merge-branch", fast_forward=True
             )
             duration = time.time() - start
             self.print_pass("git_merge", duration)
@@ -567,10 +541,7 @@ class APIValidator:
         start = time.time()
         try:
             await self.facade.rebase(
-                self.workspace_id,
-                branch=None,
-                abort=False,
-                continue_rebase=False
+                self.workspace_id, branch=None, abort=False, continue_rebase=False
             )
             duration = time.time() - start
             self.print_pass("git_rebase", duration)
@@ -585,22 +556,22 @@ class APIValidator:
         failed = total - passed
         pass_rate = (passed / total * 100) if total > 0 else 0
 
-        print(f"\n{Colors.GREEN}{'='*40}{Colors.GREEN}")
+        print(f"\n{Colors.GREEN}{'=' * 40}{Colors.GREEN}")
         print(f"{Colors.GREEN}功能接口验证总结{Colors.GREEN}")
-        print(f"{Colors.GREEN}{'='*40}{Colors.GREEN}")
+        print(f"{Colors.GREEN}{'=' * 40}{Colors.GREEN}")
         print(f"总测试数: {total}")
         print(f"{Colors.GREEN}通过: {passed}{Colors.GREEN}")
         print(f"{Colors.RED}失败: {failed}{Colors.GREEN}")
         print(f"通过率: {pass_rate:.2f}%")
-        print(f"{Colors.GREEN}{'='*40}{Colors.GREEN}\n")
+        print(f"{Colors.GREEN}{'=' * 40}{Colors.GREEN}\n")
 
         return 0 if failed == 0 else 1
 
     async def run_all_tests(self):
         """运行所有测试"""
-        print(f"{Colors.GREEN}{'='*40}{Colors.GREEN}")
+        print(f"{Colors.GREEN}{'=' * 40}{Colors.GREEN}")
         print(f"{Colors.GREEN}mcp-git 功能接口验证{Colors.GREEN}")
-        print(f"{Colors.GREEN}{'='*40}{Colors.GREEN}\n")
+        print(f"{Colors.GREEN}{'=' * 40}{Colors.GREEN}\n")
 
         try:
             await self.setup()
@@ -625,10 +596,12 @@ class APIValidator:
             print(f"{Colors.RED}测试执行失败: {e}{Colors.GREEN}")
             return 1
 
+
 async def main():
     validator = APIValidator()
     exit_code = await validator.run_all_tests()
     sys.exit(exit_code)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

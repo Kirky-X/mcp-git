@@ -4,26 +4,39 @@ Tests for server module.
 Tests for MCP server initialization, workspace operations, and Git operations.
 """
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from pathlib import Path
+import socket
 import tempfile
 import uuid
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+@pytest.fixture
+def free_port():
+    """Get a free port for testing."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+    return port
 
 
 class TestMcpGitServerInitialization:
     """Test McpGitServer initialization."""
 
     @pytest.mark.asyncio
-    async def test_server_initializes_components(self):
+    async def test_server_initializes_components(self, free_port):
         """Test that server initializes all components correctly."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -34,15 +47,16 @@ class TestMcpGitServerInitialization:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_server_double_shutdown(self):
+    async def test_server_double_shutdown(self, free_port):
         """Test that server can be shut down multiple times."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -54,15 +68,16 @@ class TestWorkspaceOperations:
     """Test workspace operations through server."""
 
     @pytest.mark.asyncio
-    async def test_allocate_workspace(self):
+    async def test_allocate_workspace(self, free_port):
         """Test allocating a workspace."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -74,15 +89,16 @@ class TestWorkspaceOperations:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_get_workspace(self):
+    async def test_get_workspace(self, free_port):
         """Test getting a workspace."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -99,15 +115,16 @@ class TestWorkspaceOperations:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_release_workspace(self):
+    async def test_release_workspace(self, free_port):
         """Test releasing a workspace."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -123,15 +140,16 @@ class TestWorkspaceOperations:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_list_workspaces(self):
+    async def test_list_workspaces(self, free_port):
         """Test listing workspaces."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -151,15 +169,16 @@ class TestGitOperations:
     """Test Git operations through server."""
 
     @pytest.mark.asyncio
-    async def test_init_repository(self):
+    async def test_init_repository(self, free_port):
         """Test initializing a Git repository."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -182,15 +201,16 @@ class TestGitOperations:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_stage_and_commit(self):
+    async def test_stage_and_commit(self, free_port):
         """Test staging files and creating a commit."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -225,15 +245,16 @@ class TestGitOperations:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_get_status(self):
+    async def test_get_status(self, free_port):
         """Test getting repository status."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -254,15 +275,16 @@ class TestTaskManagement:
     """Test task management through server."""
 
     @pytest.mark.asyncio
-    async def test_get_task(self):
+    async def test_get_task(self, free_port):
         """Test getting a task."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -282,15 +304,16 @@ class TestTaskManagement:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_list_tasks(self):
+    async def test_list_tasks(self, free_port):
         """Test listing tasks."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -314,15 +337,16 @@ class TestTaskManagement:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_cancel_task(self):
+    async def test_cancel_task(self, free_port):
         """Test cancelling a task."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -345,15 +369,16 @@ class TestErrorHandling:
     """Test error handling in server."""
 
     @pytest.mark.asyncio
-    async def test_get_nonexistent_workspace(self):
+    async def test_get_nonexistent_workspace(self, free_port):
         """Test getting a non-existent workspace."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()
@@ -365,15 +390,16 @@ class TestErrorHandling:
             await server.shutdown()
 
     @pytest.mark.asyncio
-    async def test_release_nonexistent_workspace(self):
+    async def test_release_nonexistent_workspace(self, free_port):
         """Test releasing a non-existent workspace."""
-        from mcp_git.server.server import McpGitServer
         from mcp_git.config import Config
+        from mcp_git.server.server import McpGitServer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(
                 workspace_path=Path(tmpdir) / "workspaces",
                 database_path=Path(tmpdir) / "test.db",
+                metrics_port=free_port,
             )
             server = McpGitServer(config)
             await server.initialize()

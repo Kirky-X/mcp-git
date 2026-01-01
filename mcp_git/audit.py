@@ -224,110 +224,78 @@ class AuditLogger:
         return severity_map.get(severity, 20)  # default to INFO
 
     def query_events(
+        self,
+        event_type: AuditEventType | None = None,
+        severity: AuditSeverity | None = None,
+        user_id: str | None = None,
+        workspace_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """
 
-            self,
-
-            event_type: AuditEventType | None = None,
-
-            severity: AuditSeverity | None = None,
-
-            user_id: str | None = None,
-
-            workspace_id: str | None = None,
-
-            start_time: datetime | None = None,
-
-            end_time: datetime | None = None,
-
-            limit: int = 100,
-
-        ) -> list[dict[str, Any]]:
-
-            """
-
-            Query audit events from memory.
+        Query audit events from memory.
 
 
 
-            Args:
+        Args:
 
-                event_type: Filter by event type
+            event_type: Filter by event type
 
-                severity: Filter by severity
+            severity: Filter by severity
 
-                user_id: Filter by user ID
+            user_id: Filter by user ID
 
-                workspace_id: Filter by workspace ID
+            workspace_id: Filter by workspace ID
 
-                start_time: Filter events after this time
+            start_time: Filter events after this time
 
-                end_time: Filter events before this time
+            end_time: Filter events before this time
 
-                limit: Maximum number of events to return
-
-
-
-            Returns:
-
-                List of matching audit events
-
-            """
+            limit: Maximum number of events to return
 
 
 
-            # Convert deque to list for filtering
+        Returns:
 
-            events = list(self._in_memory_events)
+            List of matching audit events
 
+        """
 
+        # Convert deque to list for filtering
 
-            # Apply filters
+        events = list(self._in_memory_events)
 
-            if event_type:
+        # Apply filters
 
-                events = [e for e in events if e["event_type"] == event_type.value]
+        if event_type:
+            events = [e for e in events if e["event_type"] == event_type.value]
 
+        if severity:
+            events = [e for e in events if e["severity"] == severity.value]
 
+        if user_id:
+            events = [e for e in events if e["user_id"] == user_id]
 
-            if severity:
+        if workspace_id:
+            events = [e for e in events if e["workspace_id"] == workspace_id]
 
-                events = [e for e in events if e["severity"] == severity.value]
+        if start_time:
+            start_str = start_time.isoformat()
 
+            events = [e for e in events if e["timestamp"] >= start_str]
 
+        if end_time:
+            end_str = end_time.isoformat()
 
-            if user_id:
+            events = [e for e in events if e["timestamp"] <= end_str]
 
-                events = [e for e in events if e["user_id"] == user_id]
+        # Sort by timestamp (newest first) and limit
 
+        events = sorted(events, key=lambda e: e["timestamp"], reverse=True)
 
-
-            if workspace_id:
-
-                events = [e for e in events if e["workspace_id"] == workspace_id]
-
-
-
-            if start_time:
-
-                start_str = start_time.isoformat()
-
-                events = [e for e in events if e["timestamp"] >= start_str]
-
-
-
-            if end_time:
-
-                end_str = end_time.isoformat()
-
-                events = [e for e in events if e["timestamp"] <= end_str]
-
-
-
-            # Sort by timestamp (newest first) and limit
-
-            events = sorted(events, key=lambda e: e["timestamp"], reverse=True)
-
-            return events[:limit]
+        return events[:limit]
 
     def get_recent_events(self, count: int = 50) -> list[dict[str, Any]]:
         """

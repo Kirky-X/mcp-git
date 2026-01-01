@@ -2,14 +2,15 @@
 Tests for rate limiting module.
 """
 
-import pytest
 import time
+
+import pytest
 
 from mcp_git.rate_limit import (
     RateLimitConfig,
     RateLimiter,
-    SlidingWindowRateLimiter,
     RateLimitMiddleware,
+    SlidingWindowRateLimiter,
 )
 
 

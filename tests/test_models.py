@@ -1,6 +1,6 @@
 """Data model tests for mcp-git."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 
@@ -151,7 +151,7 @@ class TestCommitInfo:
             message="Test commit",
             author_name="Test User",
             author_email="test@example.com",
-            commit_time=datetime.utcnow(),
+            commit_time=datetime.now(UTC),
             parent_oids=["parent123"],
         )
 
@@ -168,7 +168,7 @@ class TestCommitInfo:
             message="Test",
             author_name="Author",
             author_email="email@test.com",
-            commit_time=datetime.utcnow(),
+            commit_time=datetime.now(UTC),
         )
 
         assert commit.parent_oids == []
@@ -248,7 +248,7 @@ class TestBlameLine:
             line_number=1,
             commit_oid="abc123",
             author="Test Author",
-            date=datetime.utcnow(),
+            date=datetime.now(UTC),
             summary="Fix bug",
         )
 

@@ -39,6 +39,7 @@ from mcp_git.git.adapter import (
     PullOptions,
     PushOptions,
     RebaseOptions,
+    SparseCheckoutOptions,
     StashOptions,
     SubmoduleInfo,
     SubmoduleOptions,
@@ -1390,6 +1391,48 @@ class CliAdapter(GitAdapter):
         stdout, _ = await self._run_command(cmd)
 
         return stdout.strip()
+
+    async def sparse_checkout(
+        self,
+        path: Path,
+        options: SparseCheckoutOptions,
+    ) -> list[str]:
+        """Configure sparse checkout for a repository.
+
+        Sparse checkout allows you to only checkout specific paths in a repository,
+        reducing disk usage for large repositories.
+
+        Args:
+            path: Repository path
+            options: Sparse checkout options with paths and mode
+
+        Returns:
+            List of paths currently configured in sparse checkout
+        """
+        # Enable sparse checkout
+        cmd = [self._git_path, "-C", str(path), "config", "core.sparseCheckout", "true"]
+        await self._run_command(cmd)
+
+        # Write sparse checkout paths
+        sparse_file = path / ".git" / "info" / "sparse-checkout"
+        sparse_file.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(sparse_file, "w") as f:
+            if options.mode == "cone":
+                # Cone mode: use directory patterns
+                for sparse_path in options.paths:
+                    f.write(f"{sparse_path}\n")
+            else:
+                # Non-cone mode: use exact paths
+                for sparse_path in options.paths:
+                    f.write(f"{sparse_path}\n")
+
+        # Update working directory
+        cmd = [self._git_path, "-C", str(path), "read-tree", "-mu", "HEAD"]
+        await self._run_command(cmd)
+
+        # Return configured paths
+        return options.paths
 
     def _sanitize_input(self, input_str: str, operation: str) -> str:
         """Sanitize input to prevent command injection.

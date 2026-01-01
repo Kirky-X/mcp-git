@@ -5,12 +5,13 @@ Tests for security features including input validation,
 path traversal prevention, and command injection protection.
 """
 
-import pytest
-
-from mcp_git.utils import sanitize_input, sanitize_path, sanitize_branch_name
-from mcp_git.validation import validate_args, validate_length, validate_not_empty
-from pydantic import BaseModel
 from pathlib import Path
+
+import pytest
+from pydantic import BaseModel
+
+from mcp_git.utils import sanitize_branch_name, sanitize_input, sanitize_path
+from mcp_git.validation import validate_args, validate_length, validate_not_empty
 
 
 class TestCommandInjectionProtection:
@@ -207,11 +208,11 @@ class TestSecurityEdgeCases:
 
     def test_special_characters(self):
         """Test that special characters are handled correctly."""
-        special_chars = '!@#$%^&*()_+-=[]{}|;:\'\',.<>?/'
+        special_chars = "!@#$%^&*()_+-=[]{}|;:'',.<>?/"
         sanitized = sanitize_input(special_chars)
         # Should remove dangerous characters but keep some safe ones
-        assert ';' not in sanitized
-        assert '|' not in sanitized
-        assert '&' not in sanitized
-        assert '`' not in sanitized
-        assert '$' not in sanitized
+        assert ";" not in sanitized
+        assert "|" not in sanitized
+        assert "&" not in sanitized
+        assert "`" not in sanitized
+        assert "$" not in sanitized
