@@ -13,7 +13,7 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 
-def validate_args(schema: type[BaseModel]):
+def validate_args(schema: type[BaseModel]) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator to validate function arguments using a Pydantic schema.
 
@@ -51,7 +51,7 @@ def validate_args(schema: type[BaseModel]):
     return decorator
 
 
-def validate_length(field_name: str, max_length: int):
+def validate_length(field_name: str, max_length: int) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator to validate that a string field does not exceed maximum length.
 
@@ -78,7 +78,7 @@ def validate_length(field_name: str, max_length: int):
     return decorator
 
 
-def validate_not_empty(field_name: str):
+def validate_not_empty(field_name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator to validate that a field is not empty.
 

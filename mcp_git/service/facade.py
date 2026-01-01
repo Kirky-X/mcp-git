@@ -468,7 +468,7 @@ class GitServiceFacade:
 
         # Invalidate cache for this workspace since we're creating a commit
         from mcp_git.cache import repo_metadata_cache
-        await repo_metadata_cache.invalidate(workspace.path)
+        await repo_metadata_cache.invalidate(str(workspace.path))
 
         return await self.git_adapter.commit(workspace.path, options)
 
@@ -505,7 +505,7 @@ class GitServiceFacade:
 
         # Invalidate cache for this workspace since we're pushing changes
         from mcp_git.cache import repo_metadata_cache
-        await repo_metadata_cache.invalidate(workspace.path)
+        await repo_metadata_cache.invalidate(str(workspace.path))
 
     async def pull(
         self,
@@ -540,7 +540,7 @@ class GitServiceFacade:
 
         # Invalidate cache for this workspace since we're pulling changes
         from mcp_git.cache import repo_metadata_cache
-        await repo_metadata_cache.invalidate(workspace.path)
+        await repo_metadata_cache.invalidate(str(workspace.path))
 
     async def fetch(
         self,
