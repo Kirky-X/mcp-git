@@ -7,12 +7,17 @@ to improve performance for frequently accessed repositories.
 
 import asyncio
 import hashlib
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from mcp_git.metrics import repository_metadata_cache
+from loguru import logger
+
+from mcp_git.metrics import metrics, repository_metadata_cache
+
+UTC = timezone.utc
 
 
 @dataclass
@@ -34,8 +39,8 @@ class RepoMetadata:
     root_dirs: list[str] = field(default_factory=list)
 
     # Metadata
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_updated: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
     size_bytes: int = 0
 
     # Validity
@@ -43,7 +48,7 @@ class RepoMetadata:
 
     def is_valid(self) -> bool:
         """Check if cache entry is still valid."""
-        age = datetime.utcnow() - self.last_updated
+        age = datetime.now(UTC) - self.last_updated
         return age < timedelta(seconds=self.ttl_seconds)
 
     def to_dict(self) -> dict[str, Any]:
@@ -77,10 +82,10 @@ class RepoMetadata:
             root_dirs=data.get("root_dirs", []),
             created_at=datetime.fromisoformat(data["created_at"])
             if isinstance(data.get("created_at"), str)
-            else data.get("created_at", datetime.utcnow()),
+            else data.get("created_at", datetime.now(UTC)),
             last_updated=datetime.fromisoformat(data["last_updated"])
             if isinstance(data.get("last_updated"), str)
-            else data.get("last_updated", datetime.utcnow()),
+            else data.get("last_updated", datetime.now(UTC)),
             size_bytes=data.get("size_bytes", 0),
             ttl_seconds=data.get("ttl_seconds", 7200),
         )
@@ -141,12 +146,12 @@ class RepoMetadataCache:
             if cache_key in self._cache:
                 metadata = self._cache[cache_key]
                 if metadata.is_valid():
-                    repository_metadata_cache.record_cache_hit("repo_metadata")
+                    metrics.record_cache_hit("repo_metadata")
                     return metadata
                 else:
                     # Expired, remove from cache
                     del self._cache[cache_key]
-                    repository_metadata_cache.record_cache_miss("repo_metadata")
+                    metrics.record_cache_miss("repo_metadata")
 
         return None
 
@@ -166,7 +171,9 @@ class RepoMetadataCache:
         """
         cache_key = self._generate_cache_key(repo_url, path)
         metadata.cache_key = cache_key
-        metadata.ttl_seconds = self._default_ttl
+        # Only set TTL if not already set
+        if metadata.ttl_seconds == 7200:  # Default value
+            metadata.ttl_seconds = self._default_ttl
 
         async with self._lock:
             # Check if we need to evict entries
@@ -174,7 +181,7 @@ class RepoMetadataCache:
                 self._evict_oldest()
 
             self._cache[cache_key] = metadata
-            repository_metadata_cache.update_cache_size("repo_metadata", len(self._cache))
+            metrics.update_cache_size("repo_metadata", len(self._cache))
 
     async def invalidate(
         self,
@@ -196,7 +203,7 @@ class RepoMetadataCache:
         async with self._lock:
             if cache_key in self._cache:
                 del self._cache[cache_key]
-                repository_metadata_cache.update_cache_size("repo_metadata", len(self._cache))
+                metrics.update_cache_size("repo_metadata", len(self._cache))
                 return True
 
         return False
@@ -211,14 +218,14 @@ class RepoMetadataCache:
         async with self._lock:
             count = len(self._cache)
             self._cache.clear()
-            repository_metadata_cache.update_cache_size("repo_metadata", 0)
+            metrics.update_cache_size("repo_metadata", 0)
             return count
 
     async def get_or_fetch(
         self,
         repo_url: str,
         path: Path | None,
-        fetch_fn,
+        fetch_fn: Callable[..., Coroutine[Any, Any, RepoMetadata | None]],
     ) -> RepoMetadata | None:
         """
         Get cached metadata or fetch if not available.
@@ -241,9 +248,14 @@ class RepoMetadataCache:
             metadata = await fetch_fn(repo_url, path)
             if metadata is not None:
                 await self.set(repo_url, metadata, path)
-            return metadata
-        except Exception:
+            return metadata  # type: ignore[no-any-return]
+        except Exception as e:
             # If fetch fails, try to return stale data
+            logger.warning(
+                "Failed to fetch repository metadata, returning stale data if available",
+                repo_url=repo_url,
+                error=str(e),
+            )
             return await self.get(repo_url, path)
 
     def _evict_oldest(self) -> None:
@@ -284,7 +296,7 @@ repo_metadata_cache = RepoMetadataCache()
 class CacheManager:
     """Manager for all cache types in mcp-git."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.task_state_cache = repository_metadata_cache
         self.git_cache = repository_metadata_cache
         self.repo_metadata = repo_metadata_cache

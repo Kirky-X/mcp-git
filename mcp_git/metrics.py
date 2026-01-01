@@ -6,8 +6,10 @@ workspace management, and Git operations.
 """
 
 import time
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from functools import wraps
+from typing import Any
 
 from prometheus_client import Counter, Gauge, Histogram, Info, start_http_server
 
@@ -69,16 +71,16 @@ SERVER_INFO = Info("mcp_git_server", "Information about the mcp-git server")
 class MetricsCollector:
     """Collector for mcp-git metrics."""
 
-    def __init__(self):
-        self._task_start_times = {}
-        self._repository_cache = {}
+    def __init__(self) -> None:
+        self._task_start_times: dict[str, tuple[str, float]] = {}
+        self._repository_cache: dict[str, Any] = {}
 
-    def record_task_start(self, task_id: str, operation: str):
+    def record_task_start(self, task_id: str, operation: str) -> None:
         """Record the start of a task."""
         self._task_start_times[task_id] = (operation, time.time())
         ACTIVE_TASKS.inc()
 
-    def record_task_complete(self, task_id: str, status: str = "success"):
+    def record_task_complete(self, task_id: str, status: str = "success") -> None:
         """Record the completion of a task."""
         if task_id in self._task_start_times:
             operation, start_time = self._task_start_times.pop(task_id)
@@ -89,42 +91,42 @@ class MetricsCollector:
 
         ACTIVE_TASKS.dec()
 
-    def record_git_operation(self, operation: str, status: str = "success"):
+    def record_git_operation(self, operation: str, status: str = "success") -> None:
         """Record a Git operation."""
         GIT_OPERATIONS_TOTAL.labels(operation=operation, status=status).inc()
 
-    def record_clone(self, duration: float, repository_type: str = "unknown"):
+    def record_clone(self, duration: float, repository_type: str = "unknown") -> None:
         """Record a clone operation."""
         CLONE_DURATION.labels(repository_type=repository_type).observe(duration)
         GIT_OPERATIONS_TOTAL.labels(operation="clone", status="success").inc()
 
-    def update_queue_size(self, size: int):
+    def update_queue_size(self, size: int) -> None:
         """Update the queued tasks gauge."""
         QUEUED_TASKS.set(size)
 
-    def update_workspace_metrics(self, count: int, disk_usage: int, limit: int):
+    def update_workspace_metrics(self, count: int, disk_usage: int, limit: int) -> None:
         """Update workspace metrics."""
         WORKSPACE_COUNT.set(count)
         WORKSPACE_DISK_USAGE.set(disk_usage)
         WORKSPACE_SIZE_LIMIT.set(limit)
 
-    def update_worker_count(self, count: int):
+    def update_worker_count(self, count: int) -> None:
         """Update the worker count gauge."""
         WORKER_COUNT.set(count)
 
-    def record_cache_hit(self, cache_type: str):
+    def record_cache_hit(self, cache_type: str) -> None:
         """Record a cache hit."""
         CACHE_HITS.labels(cache_type=cache_type).inc()
 
-    def record_cache_miss(self, cache_type: str):
+    def record_cache_miss(self, cache_type: str) -> None:
         """Record a cache miss."""
         CACHE_MISSES.labels(cache_type=cache_type).inc()
 
-    def update_cache_size(self, cache_type: str, size: int):
+    def update_cache_size(self, cache_type: str, size: int) -> None:
         """Update cache size gauge."""
         CACHE_SIZE.labels(cache_type=cache_type).set(size)
 
-    def set_server_info(self, version: str, python_version: str):
+    def set_server_info(self, version: str, python_version: str) -> None:
         """Set server information."""
         SERVER_INFO.info(
             {
@@ -138,12 +140,12 @@ class MetricsCollector:
 metrics = MetricsCollector()
 
 
-def track_task(operation: str):
+def track_task(operation: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to track task execution metrics."""
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             task_id = f"{id(func)}-{time.time()}"
             metrics.record_task_start(task_id, operation)
             try:
@@ -155,7 +157,7 @@ def track_task(operation: str):
                 raise
 
         @wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             task_id = f"{id(func)}-{time.time()}"
             metrics.record_task_start(task_id, operation)
             try:
@@ -175,12 +177,12 @@ def track_task(operation: str):
     return decorator
 
 
-def track_git_operation(operation: str):
+def track_git_operation(operation: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to track Git operation metrics."""
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             try:
                 result = await func(*args, **kwargs)
@@ -195,7 +197,7 @@ def track_git_operation(operation: str):
                 raise
 
         @wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
@@ -221,13 +223,13 @@ def track_git_operation(operation: str):
 class Cache:
     """Simple in-memory cache with metrics."""
 
-    def __init__(self, max_size: int = 1000, ttl: int = 3600):
-        self._cache = {}
-        self._max_size = max_size
-        self._ttl = ttl
-        self._access_times = {}
+    def __init__(self, max_size: int = 1000, ttl: int = 3600) -> None:
+        self._cache: dict[str, Any] = {}
+        self._max_size: int = max_size
+        self._ttl: int = ttl
+        self._access_times: dict[str, float] = {}
 
-    def get(self, key: str, cache_type: str = "generic"):
+    def get(self, key: str, cache_type: str = "generic") -> Any | None:
         """Get a value from the cache."""
         if key in self._cache:
             # Check TTL
@@ -243,12 +245,12 @@ class Cache:
         metrics.record_cache_miss(cache_type)
         return None
 
-    def set(self, key: str, value: any, cache_type: str = "generic"):
+    def set(self, key: str, value: Any, cache_type: str = "generic") -> None:
         """Set a value in the cache."""
         # Check if cache is full
         if len(self._cache) >= self._max_size:
             # Remove oldest entry
-            oldest_key = min(self._access_times, key=self._access_times.get)
+            oldest_key = min(self._access_times, key=lambda k: self._access_times[k])
             del self._cache[oldest_key]
             del self._access_times[oldest_key]
 
@@ -256,7 +258,7 @@ class Cache:
         self._access_times[key] = time.time()
         metrics.update_cache_size(cache_type, len(self._cache))
 
-    def clear(self, cache_type: str = "generic"):
+    def clear(self, cache_type: str = "generic") -> None:
         """Clear the cache."""
         self._cache.clear()
         self._access_times.clear()
@@ -274,13 +276,13 @@ git_cache = Cache(max_size=500, ttl=1800)
 repository_metadata_cache = Cache(max_size=200, ttl=7200)  # 2 hours for repo metadata
 
 
-def start_metrics_server(port: int = 9090):
+def start_metrics_server(port: int = 9090) -> None:
     """Start the Prometheus metrics HTTP server."""
     start_http_server(port)
 
 
 @contextmanager
-def track_duration(operation: str):
+def track_duration(operation: str) -> Generator[None, None, None]:
     """Context manager to track operation duration."""
     start_time = time.time()
     try:
