@@ -216,12 +216,12 @@ class AuditLogger:
             Python logging level
         """
         severity_map = {
-            AuditSeverity.INFO: "INFO",
-            AuditSeverity.WARNING: "WARNING",
-            AuditSeverity.ERROR: "ERROR",
-            AuditSeverity.CRITICAL: "CRITICAL",
+            AuditSeverity.INFO: 20,  # logging.INFO
+            AuditSeverity.WARNING: 30,  # logging.WARNING
+            AuditSeverity.ERROR: 40,  # logging.ERROR
+            AuditSeverity.CRITICAL: 50,  # logging.CRITICAL
         }
-        return severity_map.get(severity, "INFO")
+        return severity_map.get(severity, 20)  # default to INFO
 
     def query_events(
 

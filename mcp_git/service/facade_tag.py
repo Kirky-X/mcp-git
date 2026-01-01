@@ -36,8 +36,7 @@ class TagOperations:
         Returns:
             List of tag names
         """
-        tags = await self.adapter.list_tags(repo_path)
-        return [tag.name for tag in tags]
+        return await self.adapter.list_tags(repo_path)
 
     async def create_tag(
         self, repo_path: Path, name: str, message: str | None = None, ref: str = "HEAD"
@@ -54,8 +53,8 @@ class TagOperations:
         Returns:
             Tag name
         """
-        options = TagOptions(message=message)
-        await self.adapter.create_tag(repo_path, name, ref=ref, options=options)
+        options = TagOptions(name=name, message=message)
+        await self.adapter.create_tag(repo_path, options=options)
         logger.info(f"Created tag {name} at {ref} in {repo_path}")
         return name
 
