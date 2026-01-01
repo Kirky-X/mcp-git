@@ -4,7 +4,7 @@ SQLite storage implementation for mcp-git.
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -13,6 +13,8 @@ import aiosqlite
 from loguru import logger
 
 from .models import OperationLog, Task, TaskStatus, Workspace
+
+UTC = timezone.utc
 
 
 class SqliteStorage:
@@ -28,6 +30,14 @@ class SqliteStorage:
         self.database_path = Path(database_path)
         self._connection: aiosqlite.Connection | None = None
         self._lock = asyncio.Lock()
+        self._slow_query_threshold = 0.1  # 100ms
+
+    @property
+    def connection(self) -> aiosqlite.Connection:
+        """Get the database connection, raising an error if not initialized."""
+        if self._connection is None:
+            raise RuntimeError("Database connection not initialized. Call initialize() first.")
+        return self._connection
 
     async def initialize(self) -> None:
         """Initialize database and create tables if needed."""
@@ -41,10 +51,10 @@ class SqliteStorage:
             )
 
             # Enable foreign keys
-            await self._connection.execute("PRAGMA foreign_keys = ON")
+            await self.connection.execute("PRAGMA foreign_keys = ON")
 
             # Set journal mode to WAL for better concurrency
-            await self._connection.execute("PRAGMA journal_mode = WAL")
+            await self.connection.execute("PRAGMA journal_mode = WAL")
 
             # Create tables
             await self._create_tables()
@@ -52,14 +62,14 @@ class SqliteStorage:
             # Create indexes
             await self._create_indexes()
 
-            await self._connection.commit()
+            await self.connection.commit()
 
         logger.info("Database initialized", path=str(self.database_path))
 
     async def _create_tables(self) -> None:
         """Create database tables."""
         # Tasks table
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE TABLE IF NOT EXISTS tasks
                                        (
                                            id
@@ -100,7 +110,7 @@ class SqliteStorage:
                                        """)
 
         # Workspaces table
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE TABLE IF NOT EXISTS workspaces
                                        (
                                            id
@@ -130,7 +140,7 @@ class SqliteStorage:
                                        """)
 
         # Operation logs table
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE TABLE IF NOT EXISTS operation_logs
                                        (
                                            id
@@ -171,27 +181,27 @@ class SqliteStorage:
 
     async def _create_indexes(self) -> None:
         """Create database indexes for query optimization."""
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)
                                        """)
 
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)
                                        """)
 
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE INDEX IF NOT EXISTS idx_tasks_operation ON tasks(operation)
                                        """)
 
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE INDEX IF NOT EXISTS idx_workspaces_last_accessed ON workspaces(last_accessed_at)
                                        """)
 
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE INDEX IF NOT EXISTS idx_operation_logs_task_id ON operation_logs(task_id)
                                        """)
 
-        await self._connection.execute("""
+        await self.connection.execute("""
                                        CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON operation_logs(timestamp)
                                        """)
 
@@ -215,9 +225,9 @@ class SqliteStorage:
             Created task with generated ID
         """
         async with self._lock:
-            now = int(datetime.utcnow().timestamp())
+            now = int(datetime.now(UTC).timestamp())
 
-            await self._connection.execute(
+            await self.connection.execute(
                 """
                 INSERT INTO tasks (id, operation, status, workspace_path, params,
                                    result, error_message, progress, created_at)
@@ -236,19 +246,23 @@ class SqliteStorage:
                 ),
             )
 
-            await self._connection.commit()
+            await self.connection.commit()
 
-            # Log task creation
-            await self.log_operation(
-                task_id=task.id,
-                operation=task.operation,
-                level="info",
-                message=f"Task created: {task.operation.value if hasattr(task.operation, 'value') else task.operation}",
-            )
+            # Log task creation (release lock first to avoid deadlock)
+            task_id_for_log = task.id
+            operation_for_log = task.operation
 
-            logger.info("Task created", task_id=str(task.id))
+        # Log outside of the lock to avoid deadlock
+        await self.log_operation(
+            task_id=task_id_for_log,
+            operation=operation_for_log,
+            level="info",
+            message=f"Task created: {operation_for_log.value if hasattr(operation_for_log, 'value') else operation_for_log}",
+        )
 
-            return task
+        logger.info("Task created", task_id=str(task.id))
+
+        return task
 
     async def get_task(self, task_id: UUID) -> Task | None:
         """
@@ -261,19 +275,20 @@ class SqliteStorage:
             Task if found, None otherwise
         """
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(
                 "SELECT * FROM tasks WHERE id = ?",
                 (str(task_id),),
             )
 
-            row = await cursor.fetchone()
-            await cursor.close()
+            try:
+                row = await cursor.fetchone()
+                if row is None:
+                    return None
+                return self._row_to_task(row)
+            finally:
+                await cursor.close()
 
-            if row is None:
-                return None
-
-            return self._row_to_task(row)
-
+    # nosec: B608 - Field names are validated against ALLOWED_FIELDS whitelist
     async def update_task(
         self,
         task_id: UUID,
@@ -302,7 +317,7 @@ class SqliteStorage:
             True if updated, False if not found
         """
         updates = []
-        params = []
+        params: list[Any] = []
 
         if status is not None:
             updates.append("status = ?")
@@ -335,15 +350,32 @@ class SqliteStorage:
         if not updates:
             return False
 
+        # Whitelist of allowed update fields to prevent SQL injection
+        ALLOWED_FIELDS = {
+            "status",
+            "progress",
+            "result",
+            "error_message",
+            "workspace_path",
+            "started_at",
+            "completed_at",
+        }
+
+        # Validate that all updates are for allowed fields
+        for update in updates:
+            field_name = update.split(" = ")[0]
+            if field_name not in ALLOWED_FIELDS:
+                raise ValueError(f"Invalid field for update: {field_name}")
+
         params.append(str(task_id))
 
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(  # nosec: B608 - Field names are validated against ALLOWED_FIELDS whitelist
                 f"UPDATE tasks SET {', '.join(updates)} WHERE id = ?",
                 params,
             )
 
-            await self._connection.commit()
+            await self.connection.commit()
             updated = cursor.rowcount > 0
 
             if updated:
@@ -362,21 +394,21 @@ class SqliteStorage:
             True if deleted, False if not found
         """
         async with self._lock:
-            cursor = await self._connection.execute(
+            # First delete associated logs to avoid foreign key constraint
+            await self.connection.execute(
+                "DELETE FROM operation_logs WHERE task_id = ?",
+                (str(task_id),),
+            )
+
+            # Then delete the task
+            cursor = await self.connection.execute(
                 "DELETE FROM tasks WHERE id = ?",
                 (str(task_id),),
             )
 
-            await self._connection.commit()
+            await self.connection.commit()
 
             if cursor.rowcount > 0:
-                # Also delete associated logs
-                await self._connection.execute(
-                    "DELETE FROM operation_logs WHERE task_id = ?",
-                    (str(task_id),),
-                )
-                await self._connection.commit()
-
                 logger.info("Task deleted", task_id=str(task_id))
                 return True
 
@@ -401,7 +433,7 @@ class SqliteStorage:
         """
         async with self._lock:
             if status:
-                cursor = await self._connection.execute(
+                cursor = await self.connection.execute(
                     """
                     SELECT *
                     FROM tasks
@@ -411,21 +443,70 @@ class SqliteStorage:
                     """,
                     (status.value if hasattr(status, "value") else status, limit, offset),
                 )
-            else:
-                cursor = await self._connection.execute(
-                    """
-                    SELECT *
-                    FROM tasks
-                    ORDER BY created_at DESC LIMIT ?
-                    OFFSET ?
-                    """,
-                    (limit, offset),
-                )
+return [self._row_to_task(row) for row in rows]
 
+    async def get_tasks_batch(self, task_ids: list[UUID]) -> list[Task]:
+        """
+        Batch get multiple tasks by IDs to avoid N+1 queries.
+
+        Args:
+            task_ids: List of task IDs to retrieve
+
+        Returns:
+            List of tasks
+        """
+        if not task_ids:
+            return []
+
+        async with self._lock:
+            placeholders = ",".join(["?"] * len(task_ids))
+            cursor = await self.connection.execute(
+                f"""
+                SELECT *
+                FROM tasks
+                WHERE id IN ({placeholders})
+                ORDER BY created_at DESC
+                """,
+                [str(tid) for tid in task_ids],
+            )
             rows = await cursor.fetchall()
-            await cursor.close()
-
             return [self._row_to_task(row) for row in rows]
+
+    async def get_workspace_info_batch(self, workspace_ids: list[UUID]) -> list[dict[str, Any]]:
+        """
+        Batch get workspace information for multiple workspaces.
+
+        Args:
+            workspace_ids: List of workspace IDs to retrieve
+
+        Returns:
+            List of workspace information dictionaries
+        """
+        if not workspace_ids:
+            return []
+
+        async with self._lock:
+            placeholders = ",".join(["?"] * len(workspace_ids))
+            cursor = await self.connection.execute(
+                f"""
+                SELECT id, path, size_bytes, created_at, last_accessed_at
+                FROM workspaces
+                WHERE id IN ({placeholders})
+                ORDER BY created_at DESC
+                """,
+                [str(wid) for wid in workspace_ids],
+            )
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "path": row[1],
+                    "size_bytes": row[2],
+                    "created_at": row[3],
+                    "last_accessed_at": row[4],
+                }
+                for row in rows
+            ]
 
     async def get_pending_tasks(self, limit: int = 10) -> list[Task]:
         """
@@ -438,7 +519,7 @@ class SqliteStorage:
             List of pending tasks
         """
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(
                 """
                 SELECT *
                 FROM tasks
@@ -448,10 +529,11 @@ class SqliteStorage:
                 (TaskStatus.QUEUED.value, limit),
             )
 
-            rows = await cursor.fetchall()
-            await cursor.close()
-
-            return [self._row_to_task(row) for row in rows]
+            try:
+                rows = await cursor.fetchall()
+                return [self._row_to_task(row) for row in rows]
+            finally:
+                await cursor.close()
 
     async def cleanup_expired_tasks(self, retention_seconds: int) -> int:
         """
@@ -464,10 +546,10 @@ class SqliteStorage:
             Number of deleted tasks
         """
         async with self._lock:
-            cutoff = datetime.utcnow() - timedelta(seconds=retention_seconds)
+            cutoff = datetime.now(UTC) - timedelta(seconds=retention_seconds)
             cutoff_timestamp = int(cutoff.timestamp())
 
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(
                 """
                 DELETE
                 FROM tasks
@@ -482,7 +564,7 @@ class SqliteStorage:
                 ),
             )
 
-            await self._connection.commit()
+            await self.connection.commit()
             deleted_count = cursor.rowcount
 
             if deleted_count > 0:
@@ -494,7 +576,7 @@ class SqliteStorage:
 
             return deleted_count
 
-    def _row_to_task(self, row: tuple) -> Task:
+    def _row_to_task(self, row: tuple | aiosqlite.Row) -> Task:
         """Convert database row to Task object."""
         return Task(
             id=UUID(row[0]),
@@ -523,9 +605,9 @@ class SqliteStorage:
             Created workspace
         """
         async with self._lock:
-            now = int(datetime.utcnow().timestamp())
+            now = int(datetime.now(UTC).timestamp())
 
-            await self._connection.execute(
+            await self.connection.execute(
                 """
                 INSERT INTO workspaces (id, path, size_bytes, last_accessed_at, created_at, metadata)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -540,7 +622,7 @@ class SqliteStorage:
                 ),
             )
 
-            await self._connection.commit()
+            await self.connection.commit()
 
             logger.info("Workspace created", workspace_id=str(workspace.id))
 
@@ -557,18 +639,18 @@ class SqliteStorage:
             Workspace if found, None otherwise
         """
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(
                 "SELECT * FROM workspaces WHERE id = ?",
                 (str(workspace_id),),
             )
 
-            row = await cursor.fetchone()
-            await cursor.close()
-
-            if row is None:
-                return None
-
-            return self._row_to_workspace(row)
+            try:
+                row = await cursor.fetchone()
+                if row is None:
+                    return None
+                return self._row_to_workspace(row)
+            finally:
+                await cursor.close()
 
     async def get_workspace_by_path(self, path: Path) -> Workspace | None:
         """
@@ -581,19 +663,20 @@ class SqliteStorage:
             Workspace if found, None otherwise
         """
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(
                 "SELECT * FROM workspaces WHERE path = ?",
                 (str(path),),
             )
 
-            row = await cursor.fetchone()
-            await cursor.close()
+            try:
+                row = await cursor.fetchone()
+                if row is None:
+                    return None
+                return self._row_to_workspace(row)
+            finally:
+                await cursor.close()
 
-            if row is None:
-                return None
-
-            return self._row_to_workspace(row)
-
+    # nosec: B608 - Field names are validated against ALLOWED_FIELDS whitelist
     async def update_workspace(
         self,
         workspace_id: UUID,
@@ -611,8 +694,14 @@ class SqliteStorage:
         Returns:
             True if updated, False if not found
         """
+        # Whitelist of allowed update fields to prevent SQL injection
+        ALLOWED_FIELDS = {
+            "size_bytes",
+            "last_accessed_at",
+        }
+
         updates = []
-        params = []
+        params: list[Any] = []
 
         if size_bytes is not None:
             updates.append("size_bytes = ?")
@@ -622,18 +711,24 @@ class SqliteStorage:
             updates.append("last_accessed_at = ?")
             params.append(int(last_accessed_at.timestamp()))
 
+        # Validate that all updates are for allowed fields
+        for update in updates:
+            field_name = update.split(" = ")[0]
+            if field_name not in ALLOWED_FIELDS:
+                raise ValueError(f"Invalid field for update: {field_name}")
+
         if not updates:
             return False
 
         params.append(str(workspace_id))
 
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(  # nosec: B608 - Field names are validated against whitelist
                 f"UPDATE workspaces SET {', '.join(updates)} WHERE id = ?",
                 params,
             )
 
-            await self._connection.commit()
+            await self.connection.commit()
             return cursor.rowcount > 0
 
     async def delete_workspace(self, workspace_id: UUID) -> bool:
@@ -647,12 +742,12 @@ class SqliteStorage:
             True if deleted, False if not found
         """
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(
                 "DELETE FROM workspaces WHERE id = ?",
                 (str(workspace_id),),
             )
 
-            await self._connection.commit()
+            await self.connection.commit()
             return cursor.rowcount > 0
 
     async def list_workspaces(
@@ -672,7 +767,7 @@ class SqliteStorage:
         """
         async with self._lock:
             if order_by_accessed:
-                cursor = await self._connection.execute(
+                cursor = await self.connection.execute(
                     """
                     SELECT *
                     FROM workspaces
@@ -681,7 +776,7 @@ class SqliteStorage:
                     (limit,),
                 )
             else:
-                cursor = await self._connection.execute(
+                cursor = await self.connection.execute(
                     """
                     SELECT *
                     FROM workspaces
@@ -690,10 +785,11 @@ class SqliteStorage:
                     (limit,),
                 )
 
-            rows = await cursor.fetchall()
-            await cursor.close()
-
-            return [self._row_to_workspace(row) for row in rows]
+            try:
+                rows = await cursor.fetchall()
+                return [self._row_to_workspace(row) for row in rows]
+            finally:
+                await cursor.close()
 
     async def get_oldest_workspaces(self, count: int = 10) -> list[Workspace]:
         """
@@ -706,7 +802,7 @@ class SqliteStorage:
             List of oldest workspaces
         """
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(
                 """
                 SELECT *
                 FROM workspaces
@@ -715,10 +811,11 @@ class SqliteStorage:
                 (count,),
             )
 
-            rows = await cursor.fetchall()
-            await cursor.close()
-
-            return [self._row_to_workspace(row) for row in rows]
+            try:
+                rows = await cursor.fetchall()
+                return [self._row_to_workspace(row) for row in rows]
+            finally:
+                await cursor.close()
 
     async def get_workspace_total_size(self) -> int:
         """
@@ -728,14 +825,15 @@ class SqliteStorage:
             Total size in bytes
         """
         async with self._lock:
-            cursor = await self._connection.execute("SELECT SUM(size_bytes) FROM workspaces")
+            cursor = await self.connection.execute("SELECT SUM(size_bytes) FROM workspaces")
 
-            result = await cursor.fetchone()
-            await cursor.close()
+            try:
+                result = await cursor.fetchone()
+                return result[0] if result and result[0] else 0
+            finally:
+                await cursor.close()
 
-            return result[0] if result and result[0] else 0
-
-    def _row_to_workspace(self, row: tuple) -> Workspace:
+    def _row_to_workspace(self, row: tuple | aiosqlite.Row) -> Workspace:
         """Convert database row to Workspace object."""
         return Workspace(
             id=UUID(row[0]),
@@ -765,7 +863,7 @@ class SqliteStorage:
             message: Log message
         """
         async with self._lock:
-            await self._connection.execute(
+            await self.connection.execute(
                 """
                 INSERT INTO operation_logs (task_id, operation, level, message, timestamp)
                 VALUES (?, ?, ?, ?, ?)
@@ -775,11 +873,11 @@ class SqliteStorage:
                     operation.value if hasattr(operation, "value") else operation,
                     level,
                     message,
-                    int(datetime.utcnow().timestamp()),
+                    int(datetime.now(UTC).timestamp()),
                 ),
             )
 
-            await self._connection.commit()
+            await self.connection.commit()
 
     async def get_operation_logs(
         self,
@@ -797,7 +895,7 @@ class SqliteStorage:
             List of operation logs
         """
         async with self._lock:
-            cursor = await self._connection.execute(
+            cursor = await self.connection.execute(
                 """
                 SELECT *
                 FROM operation_logs
@@ -808,12 +906,13 @@ class SqliteStorage:
                 (str(task_id), limit),
             )
 
-            rows = await cursor.fetchall()
-            await cursor.close()
+            try:
+                rows = await cursor.fetchall()
+                return [self._row_to_operation_log(row) for row in rows]
+            finally:
+                await cursor.close()
 
-            return [self._row_to_operation_log(row) for row in rows]
-
-    def _row_to_operation_log(self, row: tuple) -> OperationLog:
+    def _row_to_operation_log(self, row: tuple | aiosqlite.Row) -> OperationLog:
         """Convert database row to OperationLog object."""
         return OperationLog(
             id=row[0],

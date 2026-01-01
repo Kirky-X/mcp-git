@@ -6,8 +6,9 @@ are cloned and operated on.
 """
 
 import asyncio
+import os
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -16,6 +17,8 @@ from pydantic import BaseModel
 
 from mcp_git.storage import SqliteStorage, Workspace
 from mcp_git.storage.models import CleanupStrategy
+
+UTC = timezone.utc
 
 
 class WorkspaceConfig(BaseModel):
@@ -129,8 +132,8 @@ class WorkspaceManager:
             id=workspace_id,
             path=workspace_path,
             size_bytes=0,
-            last_accessed_at=datetime.utcnow(),
-            created_at=datetime.utcnow(),
+            last_accessed_at=datetime.now(UTC),
+            created_at=datetime.now(UTC),
         )
 
         # Persist to database
@@ -180,7 +183,7 @@ class WorkspaceManager:
         """
         await self.storage.update_workspace(
             workspace_id,
-            last_accessed_at=datetime.utcnow(),
+            last_accessed_at=datetime.now(UTC),
         )
 
     async def update_workspace_size(
@@ -207,7 +210,7 @@ class WorkspaceManager:
             await self.storage.update_workspace(
                 workspace_id,
                 size_bytes=size,
-                last_accessed_at=datetime.utcnow(),
+                last_accessed_at=datetime.now(UTC),
             )
         except OSError:
             pass  # Directory may have been deleted
@@ -263,7 +266,7 @@ class WorkspaceManager:
         workspaces = await self.storage.get_oldest_workspaces(100)
 
         # Calculate thresholds
-        cutoff = datetime.utcnow() - timedelta(seconds=self.config.retention_seconds)
+        cutoff = datetime.now(UTC) - timedelta(seconds=self.config.retention_seconds)
 
         for workspace in workspaces:
             # Check if expired
@@ -387,25 +390,35 @@ class WorkspaceManager:
     async def _get_workspace_size(self, workspace: Workspace) -> int:
         """Get workspace size in bytes."""
         try:
-            return await asyncio.to_thread(
-                self._get_directory_size,
-                workspace.path,
-            )
+            return await self._get_directory_size(workspace.path)
         except OSError:
             return workspace.size_bytes or 0
 
-    def _get_directory_size(self, path: Path) -> int:
-        """Get total size of directory in bytes."""
-        total = 0
+    async def _get_directory_size(self, path: Path) -> int:
+        """
+        Get total size of directory in bytes.
 
-        for entry in path.rglob("*"):
-            if entry.is_file():
-                try:
-                    total += entry.stat().st_size
-                except OSError:
-                    pass
+        Uses asyncio.to_thread to avoid blocking the event loop.
+        """
+        import asyncio
 
-        return total
+        def _calculate_size_sync() -> int:
+            total = 0
+            try:
+                # Use os.walk for better performance than Path.rglob
+                for root, _dirs, files in os.walk(path):
+                    for file in files:
+                        file_path = Path(root) / file
+                        try:
+                            total += file_path.stat().st_size
+                        except (OSError, FileNotFoundError):
+                            pass
+            except (OSError, PermissionError):
+                pass
+            return total
+
+        # Run in a separate thread to avoid blocking the event loop
+        return await asyncio.to_thread(_calculate_size_sync)
 
     def get_per_workspace_limit(self) -> int:
         """Get the per-workspace size limit in bytes."""

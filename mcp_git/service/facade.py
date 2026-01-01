@@ -7,6 +7,7 @@ and task manager.
 """
 
 import asyncio
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ from mcp_git.git.adapter import (
     PushOptions,
     RebaseOptions,
     StashOptions,
+    SubmoduleOptions,
     TagOptions,
     TransferProgressCallback,
 )
@@ -41,6 +43,7 @@ from mcp_git.storage.models import (
     TaskResult,
     TaskStatus,
 )
+from mcp_git.utils import sanitize_branch_name, sanitize_commit_message, sanitize_remote_url
 
 
 class GitServiceFacade:
@@ -75,7 +78,7 @@ class GitServiceFacade:
             storage,
             workspace_config
             or WorkspaceConfig(
-                root_path=Path("/tmp/mcp-git/workspaces"),
+                root_path=Path(tempfile.gettempdir()) / "mcp-git" / "workspaces",
                 max_size_bytes=10 * 1024 * 1024 * 1024,  # 10GB
                 retention_seconds=3600,  # 1 hour
             ),
@@ -94,7 +97,7 @@ class GitServiceFacade:
         )
 
         self.git_adapter = adapter or GitPythonAdapter()
-        self.git_adapter.set_credential_manager(self.credential_manager)
+        self.git_adapter.set_credential_manager(self.credential_manager)  # type: ignore[attr-defined]
 
         # Track service state
         self._started = False
@@ -241,12 +244,12 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
-        await self.git_adapter.add_submodule(workspace.path, options)
+        await self.git_adapter.add_submodule(workspace.path, options)  # type: ignore[attr-defined]
 
         # Stage .gitmodules if created
         try:
             await self.git_adapter.add(workspace.path, [".gitmodules"])
-        except Exception:
+        except Exception:  # nosec: B110 - Expected case: .gitmodules may not exist
             pass  # .gitmodules may not exist or be already staged
 
     async def update_submodule(
@@ -267,7 +270,7 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
-        await self.git_adapter.update_submodule(workspace.path, name, init)
+        await self.git_adapter.update_submodule(workspace.path, name, init)  # type: ignore[attr-defined]
 
     async def deinit_submodule(
         self,
@@ -287,7 +290,7 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
-        await self.git_adapter.deinit_submodule(workspace.path, name, force)
+        await self.git_adapter.deinit_submodule(workspace.path, name, force)  # type: ignore[attr-defined]
 
     async def list_submodules(
         self,
@@ -306,7 +309,7 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
-        submodules = await self.git_adapter.list_submodules(workspace.path)
+        submodules = await self.git_adapter.list_submodules(workspace.path)  # type: ignore[attr-defined]
         return [
             {
                 "name": s.name,
@@ -344,8 +347,11 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
+        # Sanitize remote URL to prevent injection attacks
+        sanitized_url = sanitize_remote_url(url)
+
         commit_info = await self.git_adapter.clone(
-            url,
+            sanitized_url,
             workspace.path,
             options,
             progress_callback,
@@ -451,11 +457,18 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
+        # Sanitize commit message to prevent injection attacks
+        sanitized_message = sanitize_commit_message(message)
+
         options = CommitOptions(
-            message=message,
+            message=sanitized_message,
             author_name=author_name,
             author_email=author_email,
         )
+
+        # Invalidate cache for this workspace since we're creating a commit
+        from mcp_git.cache import repo_metadata_cache
+        await repo_metadata_cache.invalidate(workspace.repo_path)
 
         return await self.git_adapter.commit(workspace.path, options)
 
@@ -479,13 +492,20 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
+        # Sanitize branch name to prevent injection attacks
+        sanitized_branch = sanitize_branch_name(branch) if branch else None
+
         options = PushOptions(
             remote=remote,
-            branch=branch,
+            branch=sanitized_branch,
             force=force,
         )
 
         await self.git_adapter.push(workspace.path, options)
+
+        # Invalidate cache for this workspace since we're pushing changes
+        from mcp_git.cache import repo_metadata_cache
+        await repo_metadata_cache.invalidate(workspace.repo_path)
 
     async def pull(
         self,
@@ -507,13 +527,20 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
+        # Sanitize branch name to prevent injection attacks
+        sanitized_branch = sanitize_branch_name(branch) if branch else None
+
         options = PullOptions(
             remote=remote,
-            branch=branch,
+            branch=sanitized_branch,
             rebase=rebase,
         )
 
         await self.git_adapter.pull(workspace.path, options)
+
+        # Invalidate cache for this workspace since we're pulling changes
+        from mcp_git.cache import repo_metadata_cache
+        await repo_metadata_cache.invalidate(workspace.repo_path)
 
     async def fetch(
         self,
@@ -618,7 +645,10 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
-        await self.git_adapter.create_branch(workspace.path, name, revision, force)
+        # Sanitize branch name to prevent injection attacks
+        sanitized_name = sanitize_branch_name(name)
+
+        await self.git_adapter.create_branch(workspace.path, sanitized_name, revision, force)
 
     async def delete_branch(
         self,
@@ -640,7 +670,10 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
-        await self.git_adapter.delete_branch(workspace.path, name, force, remote)
+        # Sanitize branch name to prevent injection attacks
+        sanitized_name = sanitize_branch_name(name)
+
+        await self.git_adapter.delete_branch(workspace.path, sanitized_name, force, remote)
 
     async def merge(
         self,
@@ -663,8 +696,11 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
+        # Sanitize branch name to prevent injection attacks
+        sanitized_branch = sanitize_branch_name(source_branch)
+
         options = MergeOptions(
-            source_branch=source_branch,
+            source_branch=sanitized_branch,
             fast_forward=fast_forward,
         )
 
@@ -694,8 +730,11 @@ class GitServiceFacade:
         if workspace is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
+        # Sanitize branch name to prevent injection attacks
+        sanitized_branch = sanitize_branch_name(branch) if branch else None
+
         options = RebaseOptions(
-            branch=branch,
+            branch=sanitized_branch,
             abort=abort,
             continue_rebase=continue_rebase,
         )
@@ -1186,6 +1225,31 @@ class GitServiceFacade:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
         await self.git_adapter.lfs_install(workspace.path)
+
+    async def sparse_checkout(
+        self,
+        workspace_id: UUID,
+        paths: list[str],
+        mode: str = "replace",
+    ) -> list[str]:
+        """Configure sparse checkout for a repository.
+
+        Args:
+            workspace_id: Workspace ID
+            paths: Paths to include in checkout
+            mode: Operation mode (replace, add, remove)
+
+        Returns:
+            List of paths currently configured in sparse checkout
+        """
+        from mcp_git.git.adapter import SparseCheckoutOptions
+
+        workspace = await self.workspace_manager.get_workspace(workspace_id)
+        if workspace is None:
+            raise ValueError(f"Workspace not found: {workspace_id}")
+
+        options = SparseCheckoutOptions(paths=paths, mode=mode)
+        return await self.git_adapter.sparse_checkout(workspace.path, options)
 
     # Task operations
 
