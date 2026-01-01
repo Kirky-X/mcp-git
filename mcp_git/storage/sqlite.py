@@ -181,6 +181,7 @@ class SqliteStorage:
 
     async def _create_indexes(self) -> None:
         """Create database indexes for query optimization."""
+        # Single column indexes
         await self.connection.execute("""
                                        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)
                                        """)
@@ -203,6 +204,22 @@ class SqliteStorage:
 
         await self.connection.execute("""
                                        CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON operation_logs(timestamp)
+                                       """)
+
+        # Composite indexes for common query patterns
+        await self.connection.execute("""
+                                       CREATE INDEX IF NOT EXISTS idx_tasks_status_created_at 
+                                       ON tasks(status, created_at DESC)
+                                       """)
+
+        await self.connection.execute("""
+                                       CREATE INDEX IF NOT EXISTS idx_tasks_operation_status 
+                                       ON tasks(operation, status)
+                                       """)
+
+        await self.connection.execute("""
+                                       CREATE INDEX IF NOT EXISTS idx_workspaces_created_at 
+                                       ON workspaces(created_at DESC)
                                        """)
 
     async def close(self) -> None:
