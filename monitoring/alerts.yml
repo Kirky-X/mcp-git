@@ -1,0 +1,119 @@
+groups:
+  - name: mcp_git_critical
+    interval: 30s
+    rules:
+      - alert: McpGitHighTaskFailureRate
+        expr: |
+          rate(mcp_git_tasks_total{status="failed"}[5m]) /
+          rate(mcp_git_tasks_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "High task failure rate detected"
+          description: "Failure rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+          runbook_url: "https://docs.mcp-git.com/runbooks/high-failure-rate"
+      
+      - alert: McpGitDiskSpaceCritical
+        expr: |
+          mcp_git_workspace_disk_usage_bytes / mcp_git_workspace_size_limit_bytes > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Workspace disk space critically low"
+          description: "Disk usage is {{ $value | humanizePercentage }}"
+      
+      - alert: McpGitWorkersDown
+        expr: mcp_git_worker_count < 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No workers available"
+          description: "All workers are down, tasks cannot be processed"
+
+  - name: mcp_git_warning
+    interval: 30s
+    rules:
+      - alert: McpGitTaskQueueBacklog
+        expr: mcp_git_queued_tasks > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Task queue backlog detected"
+          description: "{{ $value }} tasks waiting in queue"
+      
+      - alert: McpGitSlowTaskExecution
+        expr: |
+          histogram_quantile(0.95, rate(mcp_git_task_duration_seconds_bucket[10m])) > 60
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Task execution degraded"
+          description: "P95 latency is {{ $value }}s"
+      
+      - alert: McpGitLowCacheHitRate
+        expr: |
+          rate(mcp_git_cache_hits_total[10m]) /
+          (rate(mcp_git_cache_hits_total[10m]) + rate(mcp_git_cache_misses_total[10m])) < 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache hit rate degraded"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+      
+      - alert: McpGitHighMemoryUsage
+        expr: mcp_git_memory_usage_bytes / (1024 * 1024 * 1024) > 512  # 512MB
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanize }}"
+      
+      - alert: McpGitAuthenticationFailures
+        expr: |
+          rate(mcp_git_tasks_total{status="auth_failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failures per second: {{ $value | humanize }}"
+      
+      - alert: McpGitMergeConflicts
+        expr: |
+          rate(mcp_git_tasks_total{status="conflict"}[5m]) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frequent merge conflicts"
+          description: "Merge conflicts per second: {{ $value | humanize }}"
+
+  - name: mcp_git_info
+    interval: 60s
+    rules:
+      - alert: McpGitNoTasksProcessed
+        expr: |
+          increase(mcp_git_tasks_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "No tasks processed in last hour"
+          description: "System may be idle or malfunctioning"
+      
+      - alert: McpGitWorkspaceCountHigh
+        expr: mcp_git_workspace_count > 100
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "High workspace count"
+          description: "Active workspaces: {{ $value }}"
