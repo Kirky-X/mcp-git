@@ -12,6 +12,12 @@ from pathlib import Path
 # Maximum allowed input length
 MAX_INPUT_LENGTH = 1000
 
+# Maximum allowed lengths for specific inputs
+MAX_BRANCH_NAME_LENGTH = 255
+MAX_COMMIT_MESSAGE_LENGTH = 10000
+MAX_REMOTE_URL_LENGTH = 2048
+MAX_REPO_PATH_LENGTH = 4096
+
 # Dangerous command patterns to block
 DANGEROUS_PATTERNS = [
     r"\brm\b",  # Remove commands
@@ -128,7 +134,8 @@ def sanitize_path(path: Path, base: Path) -> Path:
     """Sanitize and validate a path against a base directory.
 
     This function ensures that the provided path is within the allowed
-    base directory and prevents path traversal attacks.
+    base directory and prevents path traversal attacks, including
+    protection against symlink-based attacks.
 
     Args:
         path: The path to sanitize
@@ -149,29 +156,45 @@ def sanitize_path(path: Path, base: Path) -> Path:
             ...
         ValueError: Path traversal attempt detected
     """
-    # Resolve both paths to absolute
-    base = base.resolve()
-    target = path.resolve()
+    # Resolve base to absolute path (no symlinks)
+    base = base.resolve(strict=True)
 
-    # Check if the path is within the base directory
+    # Convert path to absolute without resolving symlinks
+    if not path.is_absolute():
+        path = (base / path).absolute()
+
+    # Check for suspicious patterns before resolving
+    path_str = str(path)
+    suspicious_patterns = [
+        r"\.\./",  # Directory traversal
+        r"/\./",  # Current directory reference
+        r"//",  # Double slashes (except at start for absolute paths)
+    ]
+
+    for pattern in suspicious_patterns:
+        if re.search(pattern, path_str) and not (pattern == r"//" and path_str.startswith("//")):
+            raise ValueError(f"Suspicious path pattern detected: {pattern}")
+
+    # Check if any component is a symlink (security check)
+    for parent in path.parents:
+        if parent == Path("/"):
+            break
+        if parent.exists() and parent.is_symlink():
+            raise ValueError(f"Symlink detected in path: {parent}")
+
+    # Now resolve to get the actual location (this will follow symlinks)
+    try:
+        target = path.resolve(strict=True)
+    except FileNotFoundError:
+        # Path doesn't exist yet (for new files), resolve parent
+        parent = path.parent.resolve(strict=True)
+        target = parent / path.name
+
+    # Check if the resolved path is within the base directory
     try:
         target.relative_to(base)
     except ValueError as e:
         raise ValueError(f"Path traversal attempt detected: {path} is outside {base}") from e
-
-    # Additional checks for suspicious patterns
-    path_str = str(target)
-    suspicious_patterns = [
-        r"\.\./",  # Directory traversal
-        r"/\./",  # Current directory reference
-        r"//",  # Double slashes
-        r"/$BACKSPACE",  # Backspace
-        r"/$DELETE",  # Delete
-    ]
-
-    for pattern in suspicious_patterns:
-        if re.search(pattern, path_str):
-            raise ValueError(f"Suspicious path pattern detected: {pattern}")
 
     return target
 
@@ -190,6 +213,12 @@ def sanitize_branch_name(name: str) -> str:
     """
     if not name:
         raise ValueError("Branch name cannot be empty")
+
+    # Check length before processing
+    if len(name) > MAX_BRANCH_NAME_LENGTH:
+        raise ValueError(
+            f"Branch name too long: {len(name)} characters (max {MAX_BRANCH_NAME_LENGTH})"
+        )
 
     # Remove any shell metacharacters
     result = re.sub(r'[;&|`$(){}[\]<>\\"\']', "", name)
@@ -238,6 +267,12 @@ def sanitize_remote_url(url: str) -> str:
     Raises:
         ValueError: If the URL is invalid
     """
+    # Check length before processing
+    if len(url) > MAX_REMOTE_URL_LENGTH:
+        raise ValueError(
+            f"Remote URL too long: {len(url)} characters (max {MAX_REMOTE_URL_LENGTH})"
+        )
+
     # Check for obvious injection patterns
     dangerous_patterns = [
         r'[;&|`$(){}[\]<>\\"\']',
