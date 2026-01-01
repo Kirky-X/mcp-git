@@ -1,0 +1,77 @@
+{
+  "test_commits": [
+    {
+      "message": "Initial commit",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["README.md"]
+    },
+    {
+      "message": "Add main feature",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["src/main.py"]
+    },
+    {
+      "message": "Add utility functions",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["src/utils.py"]
+    },
+    {
+      "message": "Add tests",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["tests/test_main.py"]
+    },
+    {
+      "message": "Update documentation",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["README.md"]
+    },
+    {
+      "message": "Fix bug in main",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["src/main.py"]
+    },
+    {
+      "message": "Add configuration",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["config.yaml"]
+    },
+    {
+      "message": "Add logging",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["src/logger.py"]
+    },
+    {
+      "message": "Refactor utils",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["src/utils.py"]
+    },
+    {
+      "message": "Add error handling",
+      "author_name": "Test User",
+      "author_email": "test@example.com",
+      "files": ["src/error.py"]
+    }
+  ],
+  "large_repo_commits": 50,
+  "conflict_commits": [
+    {
+      "branch": "feature-a",
+      "message": "Add feature A",
+      "file": "src/feature_a.py"
+    },
+    {
+      "branch": "feature-b",
+      "message": "Add feature B",
+      "file": "src/feature_b.py"
+    }
+  ]
+}

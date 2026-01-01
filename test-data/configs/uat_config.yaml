@@ -1,0 +1,75 @@
+# UAT 验证配置
+
+# P0 功能验收
+p0_functions:
+  - name: clone
+    required: true
+    timeout: 30
+  - name: init
+    required: true
+    timeout: 10
+  - name: status
+    required: true
+    timeout: 5
+  - name: add
+    required: true
+    timeout: 5
+  - name: commit
+    required: true
+    timeout: 10
+  - name: push
+    required: true
+    timeout: 30
+  - name: pull
+    required: true
+    timeout: 30
+  - name: checkout
+    required: true
+    timeout: 5
+  - name: merge
+    required: true
+    timeout: 10
+
+# P1 功能验收
+p1_functions:
+  - name: branch
+    required: true
+    timeout: 5
+  - name: tag
+    required: true
+    timeout: 5
+  - name: stash
+    required: true
+    timeout: 5
+  - name: log
+    required: true
+    timeout: 10
+
+# 性能指标
+performance:
+  response_time:
+    max: 2000  # 毫秒
+    warning: 1500
+  memory_usage:
+    max: 100  # MB
+    warning: 80
+
+# 开发工作流场景
+workflows:
+  - name: create_repository
+    steps:
+      - init
+      - add
+      - commit
+  - name: branch_workflow
+    steps:
+      - create_branch
+      - checkout
+      - commit
+      - merge
+  - name: collaboration_workflow
+    steps:
+      - clone
+      - fetch
+      - merge
+      - push

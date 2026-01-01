@@ -5,7 +5,7 @@ This module implements the handlers for all MCP tools.
 """
 
 import json
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID
 
 from loguru import logger
@@ -18,6 +18,9 @@ from mcp_git.error import (
     MergeConflictError,
     RepositoryNotFoundError,
 )
+
+# Tool handler registry for O(1) lookup
+TOOL_HANDLER_REGISTRY: dict[str, Callable] = {}
 
 
 def format_error(error: Exception) -> str:
@@ -38,6 +41,11 @@ def format_error(error: Exception) -> str:
         return f"Unexpected error: {str(error)}"
 
 
+def register_tool_handler(name: str, handler: Callable) -> None:
+    """Register a tool handler in the registry."""
+    TOOL_HANDLER_REGISTRY[name] = handler
+
+
 def handle_list_tools() -> list[Any]:
     """
     Return list of available tools.
@@ -50,7 +58,7 @@ def handle_list_tools() -> list[Any]:
     return ALL_TOOLS
 
 
-async def handle_call_tool(server, name: str, arguments: dict[str, Any]) -> list[TextContent]:
+async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """
     Handle a tool call.
 
@@ -65,6 +73,13 @@ async def handle_call_tool(server, name: str, arguments: dict[str, Any]) -> list
     logger.info("Tool call", tool=name, args=arguments)
 
     try:
+        # Fast path: check if handler is registered in the registry
+        handler = TOOL_HANDLER_REGISTRY.get(name)
+        if handler:
+            return await handler(server, arguments)
+
+        # Fallback to if-elif chain for unregistered tools
+        # Workspace operations
         # Workspace operations
         if name == "git_allocate_workspace":
             result = await server.allocate_workspace()
@@ -425,6 +440,16 @@ async def handle_call_tool(server, name: str, arguments: dict[str, Any]) -> list
             await server.lfs_install(workspace_id)
             return [TextContent(type="text", text="Git LFS hooks installed")]
 
+        # Sparse checkout operations
+        elif name == "git_sparse_checkout":
+            workspace_id = UUID(arguments["workspace_id"])
+            result = await server.sparse_checkout(
+                workspace_id=workspace_id,
+                paths=arguments["paths"],
+                mode=arguments.get("mode", "replace"),
+            )
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
         # Task operations
         elif name == "git_get_task":
             task_id = UUID(arguments["task_id"])
@@ -450,14 +475,20 @@ async def handle_call_tool(server, name: str, arguments: dict[str, Any]) -> list
 
     except RepositoryNotFoundError as e:
         logger.error("Repository not found", error=str(e))
+        from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+        GIT_OPERATIONS_TOTAL.labels(operation=name, status="not_found").inc()
         return [TextContent(type="text", text=f"Error: Repository not found - {e.message}")]
 
     except AuthenticationError as e:
         logger.error("Authentication failed", error=str(e))
+        from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+        GIT_OPERATIONS_TOTAL.labels(operation=name, status="auth_failed").inc()
         return [TextContent(type="text", text=f"Error: Authentication failed - {e.message}")]
 
     except MergeConflictError as e:
         logger.error("Merge conflict", files=e.conflicted_files)
+        from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+        GIT_OPERATIONS_TOTAL.labels(operation=name, status="conflict").inc()
         return [
             TextContent(
                 type="text", text=f"Error: Merge conflict in files: {', '.join(e.conflicted_files)}"
@@ -466,17 +497,25 @@ async def handle_call_tool(server, name: str, arguments: dict[str, Any]) -> list
 
     except GitOperationError as e:
         logger.error("Git operation error", error=str(e))
-        suggestion = f"\nSuggestion: {e.suggestion}" if e.suggestion else ""
+        from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+        GIT_OPERATIONS_TOTAL.labels(operation=name, status="error").inc()
+        suggestion = f"\n\nSuggestion: {e.suggestion}" if e.suggestion else ""
         return [TextContent(type="text", text=f"Error: {e.message}{suggestion}")]
 
     except McpGitError as e:
         logger.error("MCP Git error", error=str(e))
+        from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+        GIT_OPERATIONS_TOTAL.labels(operation=name, status="mcp_error").inc()
         return [TextContent(type="text", text=f"Error: {e.message}")]
 
     except ValueError as e:
         logger.error("Invalid argument", error=str(e))
+        from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+        GIT_OPERATIONS_TOTAL.labels(operation=name, status="invalid_arg").inc()
         return [TextContent(type="text", text=f"Invalid argument: {str(e)}")]
 
     except Exception as e:
         logger.error("Unexpected error", error=str(e))
+        from mcp_git.metrics import GIT_OPERATIONS_TOTAL
+        GIT_OPERATIONS_TOTAL.labels(operation=name, status="unexpected").inc()
         return [TextContent(type="text", text=f"Unexpected error: {str(e)}")]

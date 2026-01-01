@@ -1,0 +1,92 @@
+# 测试配置
+
+# 测试数据路径
+data_paths:
+  repos: "/home/project/mcp-git/temp/test/data/repos"
+  fixtures: "/home/project/mcp-git/temp/test/data/fixtures"
+
+# 测试仓库配置
+test_repos:
+  - name: test-repo-1
+    type: small
+    commits: 4
+    branches: 2
+  - name: test-repo-2
+    type: medium
+    commits: 20
+    branches: 3
+    has_conflicts: true
+  - name: test-repo-lfs
+    type: lfs
+    has_large_files: true
+
+# 功能接口测试配置
+api_tests:
+  workspace_management:
+    enabled: true
+    tests:
+      - allocate_workspace
+      - get_workspace
+      - release_workspace
+      - list_workspaces
+      - disk_space
+
+  repository_operations:
+    enabled: true
+    tests:
+      - clone
+      - init
+      - status
+
+  commit_operations:
+    enabled: true
+    tests:
+      - add
+      - commit
+
+  branch_operations:
+    enabled: true
+    tests:
+      - create_branch
+      - list_branches
+      - checkout
+      - delete_branch
+
+  history_operations:
+    enabled: true
+    tests:
+      - log
+      - show
+      - diff
+      - blame
+
+  tag_operations:
+    enabled: true
+    tests:
+      - create_tag
+      - list_tags
+      - delete_tag
+
+# 场景测试配置
+scenario_tests:
+  enabled: true
+  scenarios:
+    - name: ai_code_review
+      description: AI 代码审查助手场景
+      timeout: 60
+    - name: automated_bug_fix
+      description: 自动化 Bug 修复场景
+      timeout: 60
+    - name: multi_repo_sync
+      description: 多仓库同步场景
+      timeout: 60
+    - name: team_collaboration
+      description: 团队协作场景
+      timeout: 60
+
+# 输出配置
+output:
+  format: console
+  verbose: false
+  show_duration: true
+  show_errors: true
