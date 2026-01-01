@@ -76,11 +76,12 @@ class TaskQueue:
         # Semaphore for concurrency control
         self._semaphore = asyncio.Semaphore(max_concurrent)
 
-        # Active task tracking
+        # Active task tracking with lock for thread safety
         self._active_tasks: set[asyncio.Task] = set()
         self._active_count = 0
+        self._active_lock = asyncio.Lock()
 
-        # Metrics
+        # Metrics with lock for thread safety
         self._metrics = {
             "submitted": 0,
             "completed": 0,
@@ -90,6 +91,7 @@ class TaskQueue:
             "avg_processing_time": 0.0,
             "total_processing_time": 0.0,
         }
+        self._metrics_lock = asyncio.Lock()
 
         # Worker task
         self._worker_task: asyncio.Task | None = None
@@ -242,7 +244,7 @@ class TaskQueue:
             List of task info
         """
         tasks = []
-        items = list(self._queue._queue)  # Internal heap
+        items = list(self._queue._queue)  # type: ignore[attr-defined]  # Internal heap
 
         for task in sorted(items)[:limit]:
             tasks.append(
@@ -258,30 +260,40 @@ class TaskQueue:
 
         return tasks
 
-    def get_metrics(self) -> dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """
         Get queue metrics.
 
         Returns:
             Metrics dictionary
         """
-        avg_time = (
-            self._metrics["total_processing_time"] / self._metrics["completed"]
-            if self._metrics["completed"] > 0
-            else 0.0
-        )
+        # Use lock to safely read metrics and active count
+        async with self._metrics_lock:
+            avg_time = (
+                self._metrics["total_processing_time"] / self._metrics["completed"]
+                if self._metrics["completed"] > 0
+                else 0.0
+            )
+
+            metrics_snapshot = {
+                "submitted": self._metrics["submitted"],
+                "completed": self._metrics["completed"],
+                "failed": self._metrics["failed"],
+                "retried": self._metrics["retried"],
+                "cancelled": self._metrics["cancelled"],
+                "avg_processing_time_seconds": avg_time,
+            }
+
+        # Use lock to safely read active count
+        async with self._active_lock:
+            active_count = self._active_count
 
         return {
-            "submitted": self._metrics["submitted"],
-            "completed": self._metrics["completed"],
-            "failed": self._metrics["failed"],
-            "retried": self._metrics["retried"],
-            "cancelled": self._metrics["cancelled"],
-            "avg_processing_time_seconds": avg_time,
+            **metrics_snapshot,
             "queue_size": self._queue.qsize(),
-            "active_count": self._active_count,
+            "active_count": active_count,
             "max_concurrent": self.max_concurrent,
-            "available_slots": self.max_concurrent - self._active_count,
+            "available_slots": self.max_concurrent - active_count,
         }
 
     async def _process_queue(self) -> None:
@@ -304,14 +316,21 @@ class TaskQueue:
                         await self._queue.put(task)
                         break
 
-                    # Create worker task
-                    self._active_count += 1
-                    worker = asyncio.create_task(self._run_task(task))
-                    self._active_tasks.add(worker)
+                    # Create worker task with lock protection
+                    async with self._active_lock:
+                        self._active_count += 1
+                        worker = asyncio.create_task(self._run_task(task))
+                        self._active_tasks.add(worker)
 
-                    def done_callback(t: asyncio.Task):
-                        self._active_tasks.discard(t)
-                        self._active_count -= 1
+                    def done_callback(t: asyncio.Task) -> None:
+                        # Use lock to safely update counters
+                        async def update_counters() -> None:
+                            async with self._active_lock:
+                                self._active_tasks.discard(t)
+                                self._active_count -= 1
+
+                        # Schedule the update as a task
+                        asyncio.create_task(update_counters())
 
                     worker.add_done_callback(done_callback)
 
@@ -332,10 +351,11 @@ class TaskQueue:
             else:
                 result = task.coroutine(**task.params)
 
-            # Update metrics
+            # Update metrics with lock protection
             processing_time = time.time() - start_time
-            self._metrics["completed"] += 1
-            self._metrics["total_processing_time"] += processing_time
+            async with self._metrics_lock:
+                self._metrics["completed"] += 1
+                self._metrics["total_processing_time"] += processing_time
 
             logger.debug(
                 "Task completed",
@@ -351,14 +371,16 @@ class TaskQueue:
                     logger.error("Complete callback failed", error=str(e))
 
         except asyncio.CancelledError:
-            self._metrics["cancelled"] += 1
+            async with self._metrics_lock:
+                self._metrics["cancelled"] += 1
             logger.info("Task cancelled", task_id=task.id)
 
         except Exception as e:
             # Check if we should retry
             if task.retries < task.max_retries:
                 task.retries += 1
-                self._metrics["retried"] += 1
+                async with self._metrics_lock:
+                    self._metrics["retried"] += 1
 
                 logger.warning(
                     "Task failed, retrying",
@@ -372,10 +394,12 @@ class TaskQueue:
                 try:
                     await self._queue.put(task)
                 except asyncio.QueueFull:
-                    self._metrics["failed"] += 1
+                    async with self._metrics_lock:
+                        self._metrics["failed"] += 1
                     logger.error("Task failed permanently, queue full", task_id=task.id)
             else:
-                self._metrics["failed"] += 1
+                async with self._metrics_lock:
+                    self._metrics["failed"] += 1
                 logger.error(
                     "Task failed permanently",
                     task_id=task.id,
