@@ -1,12 +1,17 @@
+"""Distributed tracing module for mcp-git."""
+
+import contextvars
+import time
+import uuid
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator
-from uuid import UUID
+from typing import Any
 
 from loguru import logger
 
-
 # Context variable for current span
-current_span: contextvars.ContextVar[Span | None] = contextvars.ContextVar("current_span", default=None)
+current_span: contextvars.ContextVar["Span | None"] = contextvars.ContextVar("current_span", default=None)
 
 
 @dataclass

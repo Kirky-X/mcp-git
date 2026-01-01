@@ -1,14 +1,17 @@
-"""
-Git tag operations for Git Service Facade.
+"""Git tag operations for Git Service Facade.
 
 This module contains tag-related operations extracted from the facade.
 """
 
-from uuid import UUID
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from mcp_git.git.adapter import TagOptions
+
+if TYPE_CHECKING:
+    from mcp_git.git.adapter import GitAdapter
 
 
 class TagOperations:

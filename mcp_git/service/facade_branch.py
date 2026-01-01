@@ -1,15 +1,18 @@
-"""
-Git branch operations for Git Service Facade.
+"""Git branch operations for Git Service Facade.
 
 This module contains branch-related operations extracted from the facade.
 """
 
-from uuid import UUID
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from mcp_git.git.adapter import MergeOptions
 from mcp_git.utils import sanitize_branch_name
+
+if TYPE_CHECKING:
+    from mcp_git.git.adapter import GitAdapter
 
 
 class BranchOperations:
