@@ -46,7 +46,7 @@ class RetryConfig:
 
         if self.jitter:
             variation = delay * self.jitter_factor
-            delay = delay + random.uniform(-variation, variation)
+            delay = delay + random.uniform(-variation, variation)  # nosec: B311 - Not used for security purposes
 
         return max(0, delay)
 
@@ -72,9 +72,9 @@ class RetryableError(McpGitError):
 
 async def retry_async(
     func: Callable[..., T],
-    *args,
+    *args: Any,
     config: RetryConfig | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> T:
     """Execute a function with automatic retry on failure.
 
@@ -96,7 +96,7 @@ async def retry_async(
 
     for attempt in range(config.max_retries + 1):
         try:
-            return await func(*args, **kwargs)
+            return await func(*args, **kwargs)  # type: ignore[no-any-return, misc]
 
         except McpGitError as e:
             last_error = e
@@ -128,7 +128,7 @@ async def retry_async(
             )
 
             if attempt >= config.max_retries:
-                raise last_error
+                raise last_error from None
 
             delay = config.get_delay(attempt)
             if delay > 0:
@@ -143,7 +143,7 @@ async def retry_async(
     )
 
 
-def with_retry(config: RetryConfig | None = None) -> Callable:
+def with_retry(config: RetryConfig | None = None) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator to add retry behavior to an async function.
 
     Args:
@@ -155,11 +155,11 @@ def with_retry(config: RetryConfig | None = None) -> Callable:
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
-        async def wrapper(*args, Any, **kwargs) -> T:
+        async def wrapper(*args: Any, **kwargs: Any) -> T:
             return await retry_async(func, *args, config=config, **kwargs)
 
         @wraps(func)
-        def sync_wrapper(*args, Any, **kwargs) -> T:
+        def sync_wrapper(*args: Any, **kwargs: Any) -> T:
             # For sync functions, run in executor
             loop = asyncio.new_event_loop()
             try:
@@ -168,7 +168,7 @@ def with_retry(config: RetryConfig | None = None) -> Callable:
                 loop.close()
 
         # Return async version
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 

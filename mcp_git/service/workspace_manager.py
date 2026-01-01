@@ -206,7 +206,7 @@ class WorkspaceManager:
             path = workspace.path
 
         try:
-            size = self._get_directory_size(path)
+            size = await self._get_directory_size(path)
             await self.storage.update_workspace(
                 workspace_id,
                 size_bytes=size,

@@ -236,6 +236,7 @@ class MergeConflictError(McpGitError):
         context: ErrorContext | None = None,
     ):
         ctx = context or ErrorContext(operation="merge")
+        self.conflicted_files = conflicted_files
 
         super().__init__(
             code=ErrorCode.GIT_MERGE_CONFLICT,

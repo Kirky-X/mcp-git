@@ -20,26 +20,26 @@ class ErrorSanitizer:
         (r'(secret[=:]\s*)\S+', r'\1***'),
         (r'(api[_-]?key[=:]\s*)\S+', r'\1***'),
         (r'(access[_-]?token[=:]\s*)\S+', r'\1***'),
-        
+
         # Git tokens in URLs
         (r'(https?://)[^:]+:(.+?)@', r'\1***:***@'),
         (r'(git@)[^:]+:(.+?)@', r'\1***:***@'),
-        
+
         # SSH keys
         (r'(-----BEGIN\s+.*?PRIVATE\s+KEY-----).+?(-----END\s+.*?PRIVATE\s+KEY-----)', r'\1***\2'),
-        
+
         # File paths with sensitive directories
         (r'/home/[^/\s]+/', r'/home/****/'),
         (r'/root/', r'/****/'),
         (r'/Users/[^/\s]+/', r'/Users/****/'),
-        
+
         # Database connection strings
         (r'(mongodb://)[^:]+:[^@]+@', r'\1***:***@'),
         (r'(postgres://)[^:]+:[^@]+@', r'\1***:***@'),
-        
+
         # Environment variables
         (r'(ENV\[)[^\]]+\]', r'\1***'),
-        
+
         # IP addresses (partial masking)
         (r'(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})', r'\1.***.***.\4'),
         (r'(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})', r'\1.***.***.\4'),
@@ -48,7 +48,7 @@ class ErrorSanitizer:
     def __init__(self):
         """Initialize the error sanitizer."""
         self._compiled_patterns = []
-        for i, (pattern, replacement) in enumerate(self.SENSITIVE_PATTERNS):
+        for pattern, replacement in self.SENSITIVE_PATTERNS:
             # Use re.DOTALL for SSH key patterns to match across multiple lines
             flags = re.IGNORECASE
             if r'PRIVATE\s+KEY-----' in pattern:

@@ -208,17 +208,17 @@ class SqliteStorage:
 
         # Composite indexes for common query patterns
         await self.connection.execute("""
-                                       CREATE INDEX IF NOT EXISTS idx_tasks_status_created_at 
+                                       CREATE INDEX IF NOT EXISTS idx_tasks_status_created_at
                                        ON tasks(status, created_at DESC)
                                        """)
 
         await self.connection.execute("""
-                                       CREATE INDEX IF NOT EXISTS idx_tasks_operation_status 
+                                       CREATE INDEX IF NOT EXISTS idx_tasks_operation_status
                                        ON tasks(operation, status)
                                        """)
 
         await self.connection.execute("""
-                                       CREATE INDEX IF NOT EXISTS idx_workspaces_created_at 
+                                       CREATE INDEX IF NOT EXISTS idx_workspaces_created_at
                                        ON workspaces(created_at DESC)
                                        """)
 
@@ -230,7 +230,7 @@ class SqliteStorage:
                 await self._connection.commit()
             except Exception as e:
                 logger.warning("Failed to commit pending transactions during close", error=str(e))
-            
+
             try:
                 # Close the connection
                 await self._connection.close()
@@ -486,6 +486,9 @@ class SqliteStorage:
                 )
                 rows = await cursor.fetchall()
                 return [self._row_to_task(row) for row in rows]
+
+            # If no status filter, return empty list
+            return []
 
     async def get_tasks_batch(self, task_ids: list[UUID]) -> list[Task]:
         """

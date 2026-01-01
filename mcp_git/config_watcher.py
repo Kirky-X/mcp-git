@@ -18,6 +18,7 @@ from mcp_git.config import (
     load_config,
 )
 
+
 class ConfigWatcher:
     """Configuration watcher with hot-reload support.
 

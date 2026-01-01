@@ -8,8 +8,9 @@ ensure fair resource usage.
 import asyncio
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from loguru import logger
 

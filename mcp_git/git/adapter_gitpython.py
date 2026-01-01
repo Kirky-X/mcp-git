@@ -6,10 +6,10 @@ using the GitPython library.
 """
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import git
 from git import RemoteProgress, Repo
@@ -37,26 +37,32 @@ from .adapter import (
     CommitOptions,
     DiffOptions,
     GitAdapter,
+    LfsFileInfo,
     LogOptions,
     MergeOptions,
     MergeResult,
     PullOptions,
     PushOptions,
     RebaseOptions,
+    SparseCheckoutOptions,
     StashOptions,
+    SubmoduleInfo,
+    SubmoduleOptions,
     TagOptions,
     TransferProgressCallback,
 )
+
+T = TypeVar("T")
 
 
 class GitPythonAdapter(GitAdapter):
     """GitPython implementation of GitAdapter."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the adapter."""
         self._credential_manager = None
 
-    def set_credential_manager(self, credential_manager) -> None:
+    def set_credential_manager(self, credential_manager: Any) -> None:
         """Set the credential manager for authentication.
 
         Args:
@@ -67,10 +73,10 @@ class GitPythonAdapter(GitAdapter):
     async def _execute_with_retry(
         self,
         operation: str,
-        func: Callable,
-        *args,
-        **kwargs,
-    ) -> Any:
+        func: Callable[..., Coroutine[Any, Any, T]],
+        *args: Any,
+        **kwargs: Any,
+    ) -> T:
         """Execute a network operation with automatic retry.
 
         Args:
@@ -86,7 +92,7 @@ class GitPythonAdapter(GitAdapter):
         if operation.lower() == "clone":
             config = RetryPolicy.CLONE
 
-        return await retry_async(func, *args, config=config, **kwargs)
+        return await retry_async(func, *args, config=config, **kwargs)  # type: ignore[arg-type]
 
     async def _get_repo(self, path: Path) -> Repo:
         """Get a GitPython Repo object.
@@ -107,7 +113,7 @@ class GitPythonAdapter(GitAdapter):
                 message=f"Not a valid Git repository: {path}",
                 details=str(e),
                 suggestion="Ensure the path contains a valid .git directory",
-            )
+            ) from e
 
     async def _ensure_repo(self, path: Path) -> Repo:
         """Ensure repository exists, create if not.
@@ -138,14 +144,18 @@ class GitPythonAdapter(GitAdapter):
         options = options or CloneOptions()
 
         # Sanitize the path
-        path = sanitize_path(path)
+        path = (
+            sanitize_path(path, path.parent)
+            if path.is_absolute()
+            else sanitize_path(path.parent / path, path.parent)
+        )
         parent_dir = path.parent
         parent_dir.mkdir(parents=True, exist_ok=True)
 
         async def _do_clone() -> CommitInfo:
             """Perform the actual clone operation."""
             # Prepare clone arguments
-            clone_kwargs = {
+            clone_kwargs: dict[str, Any] = {
                 "depth": options.depth,
                 "single_branch": options.single_branch,
                 "no_single_branch": not options.single_branch,
@@ -171,15 +181,15 @@ class GitPythonAdapter(GitAdapter):
                     def __init__(self, callback: TransferProgressCallback):
                         super().__init__()
                         self.callback = callback
-                        self.op_codes = []
+                        self.op_codes: list[int] = []
 
-                    def update(
+                    def update(  # type: ignore[override]
                         self,
                         op_code: int,
                         cur_count: str | float,
                         max_count: str | float | None,
                         message: str = "",
-                    ):
+                    ) -> None:
                         if op_code & RemoteProgress.COUNTING:
                             self.op_codes.append(op_code)
                         total = float(max_count) if max_count else 100
@@ -187,10 +197,10 @@ class GitPythonAdapter(GitAdapter):
                         self.callback(progress, 100, 0)
 
                 progress_tracker = ProgressTracker(progress_callback)
-                clone_kwargs["progress"] = progress_tracker
+                clone_kwargs["progress"] = progress_tracker  # type: ignore[assignment]
 
             # Clone the repository
-            repo = await asyncio.to_thread(
+            repo = await asyncio.to_thread(  # type: ignore[arg-type]
                 git.Repo.clone_from,
                 url,
                 str(path),
@@ -209,9 +219,9 @@ class GitPythonAdapter(GitAdapter):
             head_commit = repo.head.commit
             return CommitInfo(
                 oid=head_commit.hexsha,
-                message=head_commit.message,
-                author_name=head_commit.author.name,
-                author_email=head_commit.author.email,
+                message=str(head_commit.message),
+                author_name=str(head_commit.author.name),
+                author_email=str(head_commit.author.email),
                 commit_time=datetime.fromtimestamp(head_commit.authored_date),
                 parent_oids=[p.hexsha for p in head_commit.parents],
             )
@@ -221,19 +231,19 @@ class GitPythonAdapter(GitAdapter):
 
         except git.GitCommandError as e:
             if "not found" in str(e).lower() or "could not resolve" in str(e).lower():
-                raise RepositoryNotFoundError(url)
+                raise RepositoryNotFoundError(url) from e
             elif "authentication" in str(e).lower():
-                raise AuthenticationError(message=str(e))
+                raise AuthenticationError(message=str(e)) from e
             else:
                 raise GitOperationError(
                     message=f"Clone failed: {e.stderr}",
                     details=str(e),
-                )
+                ) from e
         except Exception as e:
             raise GitOperationError(
                 message=f"Clone failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def init(
         self,
@@ -242,7 +252,13 @@ class GitPythonAdapter(GitAdapter):
         default_branch: str = "main",
     ) -> None:
         """Initialize a new repository."""
-        path = sanitize_path(path)
+        from mcp_git.utils import sanitize_path
+
+        path = (
+            sanitize_path(path, path.parent)
+            if path.is_absolute()
+            else sanitize_path(path.parent / path, path.parent)
+        )
 
         try:
             if bare:
@@ -262,7 +278,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Init failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def _setup_sparse_checkout(
         self,
@@ -281,7 +297,7 @@ class GitPythonAdapter(GitAdapter):
             repo.git.update_index("--no-assume-unchanged")
 
             # Use git sparse-checkout
-            sparse_dir = repo.worktree / ".git" / "info" / "sparse-checkout"
+            sparse_dir = repo.worktree / ".git" / "info" / "sparse-checkout"  # type: ignore[attr-defined]
             sparse_dir.parent.mkdir(parents=True, exist_ok=True)
 
             with open(sparse_dir, "w") as f:
@@ -295,7 +311,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Failed to set up sparse checkout: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def _apply_filter_spec(
         self,
@@ -332,7 +348,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Failed to apply filter spec: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def status(self, path: Path) -> list[FileStatus]:
         """Get working directory status."""
@@ -342,15 +358,17 @@ class GitPythonAdapter(GitAdapter):
         # Get staged changes
         staged = repo.index.diff("HEAD")
         for item in staged:
-            statuses.append(
-                FileStatus(
-                    path=item.a_path or item.b_path,
-                    status="staged",
+            path_str = item.a_path or item.b_path
+            if path_str:
+                statuses.append(
+                    FileStatus(
+                        path=str(path_str),
+                        status="staged",
+                    )
                 )
-            )
 
         # Get unstaged changes
-        unstaged = repo.diff(None)
+        unstaged = repo.diff(None)  # type: ignore[attr-defined]
         for item in unstaged:
             if item.new_file:
                 statuses.append(FileStatus(path=item.a_path, status="modified"))
@@ -375,7 +393,11 @@ class GitPythonAdapter(GitAdapter):
             file_paths = []
             for f in files:
                 full_path = path / f if not Path(f).is_absolute() else Path(f)
-                full_path = sanitize_path(full_path)
+                full_path = (
+                    sanitize_path(full_path, path)
+                    if full_path.is_absolute()
+                    else sanitize_path(path / full_path, path)
+                )
                 file_paths.append(str(full_path))
 
             repo.index.add(file_paths)
@@ -384,11 +406,9 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Add failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
-    async def reset(
-        self, path: Path, files: list[str] | None = None, hard: bool = False
-    ) -> None:
+    async def reset(self, path: Path, files: list[str] | None = None, hard: bool = False) -> None:
         """Reset staging area and/or working directory."""
         repo = await self._get_repo(path)
 
@@ -398,7 +418,11 @@ class GitPythonAdapter(GitAdapter):
             elif files:
                 for f in files:
                     full_path = path / f if not Path(f).is_absolute() else Path(f)
-                    full_path = sanitize_path(full_path)
+                    full_path = (
+                        sanitize_path(full_path, path)
+                        if full_path.is_absolute()
+                        else sanitize_path(path / full_path, path)
+                    )
                     repo.index.remove([str(full_path)], working_tree=hard)
             else:
                 repo.head.reset(index=True)
@@ -407,7 +431,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Reset failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def commit(self, path: Path, options: CommitOptions) -> str:
         """Create a new commit."""
@@ -434,7 +458,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Commit failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def restore(
         self,
@@ -451,20 +475,31 @@ class GitPythonAdapter(GitAdapter):
                 commit = repo.commit(revision)
                 for f in files:
                     full_path = path / f if not Path(f).is_absolute() else Path(f)
-                    full_path = sanitize_path(full_path)
+                    full_path = (
+                        sanitize_path(full_path, path)
+                        if full_path.is_absolute()
+                        else sanitize_path(path / full_path, path)
+                    )
                     commit.tree[str(full_path)].stream_to_destination(str(full_path))
             elif staged:
                 # Restore from index
                 for f in files:
                     full_path = path / f if not Path(f).is_absolute() else Path(f)
-                    full_path = sanitize_path(full_path)
-                    repo.index.restore在工作区文件中保留暂存更改
+                    full_path = (
+                        sanitize_path(full_path, path)
+                        if full_path.is_absolute()
+                        else sanitize_path(path / full_path, path)
+                    )
                     repo.index.restore(str(full_path), working_tree=True)
             else:
                 # Discard changes
                 for f in files:
                     full_path = path / f if not Path(f).is_absolute() else Path(f)
-                    full_path = sanitize_path(full_path)
+                    full_path = (
+                        sanitize_path(full_path, path)
+                        if full_path.is_absolute()
+                        else sanitize_path(path / full_path, path)
+                    )
                     if (full_path).exists():
                         full_path.unlink()
 
@@ -472,7 +507,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Restore failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def fetch(
         self,
@@ -486,14 +521,15 @@ class GitPythonAdapter(GitAdapter):
 
         async def _do_fetch() -> None:
             """Perform the actual fetch operation."""
-            if remote is None:
+            remote_name = remote
+            if remote_name is None:
                 # Get origin or first remote
                 if repo.remotes:
-                    remote = repo.remotes[0].name
+                    remote_name = repo.remotes[0].name
                 else:
                     return  # No remotes to fetch
 
-            git_remote = repo.remotes[remote]
+            git_remote = repo.remotes[remote_name]
 
             # Prepare fetch kwargs
             fetch_kwargs = {}
@@ -504,13 +540,13 @@ class GitPythonAdapter(GitAdapter):
                         super().__init__()
                         self.callback = callback
 
-                    def update(
+                    def update(  # type: ignore[override]
                         self,
                         op_code: int,
                         cur_count: str | float,
                         max_count: str | float | None,
                         message: str = "",
-                    ):
+                    ) -> None:
                         total = float(max_count) if max_count else 100
                         progress = int((float(cur_count) / total) * 100) if total else 0
                         self.callback(progress, 100, 0)
@@ -519,9 +555,9 @@ class GitPythonAdapter(GitAdapter):
 
             # Fetch
             if tags:
-                git_remote.fetch(tags=True, **fetch_kwargs)
+                git_remote.fetch(tags=True, **fetch_kwargs)  # type: ignore[arg-type]
             else:
-                git_remote.fetch(**fetch_kwargs)
+                git_remote.fetch(**fetch_kwargs)  # type: ignore[arg-type]
 
         try:
             await self._execute_with_retry("fetch", _do_fetch)
@@ -530,7 +566,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Fetch failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def push(self, path: Path, options: PushOptions) -> None:
         """Push to remote repository with automatic retry."""
@@ -549,34 +585,34 @@ class GitPythonAdapter(GitAdapter):
                 elif options.force_with_lease:
                     push_kwargs["force"] = True
 
-                remote.push(refspec=f"{branch.name}:{branch.name}", **push_kwargs)
+                remote.push(refspec=f"{branch.name}:{branch.name}", **push_kwargs)  # type: ignore[arg-type]
             else:
                 # Push all branches
                 remote = repo.remotes[options.remote]
-                remote.push(**{"force": options.force} if options.force else {})
+                remote.push(**{"force": options.force} if options.force else {})  # type: ignore[arg-type]
 
         try:
             await self._execute_with_retry("push", _do_push)
 
         except git.GitCommandError as e:
             if "authentication" in str(e).lower():
-                raise AuthenticationError(message=str(e))
+                raise AuthenticationError(message=str(e)) from e
             elif "rejected" in str(e).lower() or "non-fast-forward" in str(e).lower():
                 raise GitOperationError(
                     message="Push was rejected",
                     details=str(e),
                     suggestion="Pull the latest changes and try again, or use force push",
-                )
+                ) from e
             else:
                 raise GitOperationError(
                     message=f"Push failed: {str(e)}",
                     details=str(e),
-                )
+                ) from e
         except Exception as e:
             raise GitOperationError(
                 message=f"Push failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def pull(self, path: Path, options: PullOptions) -> None:
         """Pull from remote repository with automatic retry."""
@@ -612,19 +648,19 @@ class GitPythonAdapter(GitAdapter):
                 # Check for merge conflicts
                 if repo.index.conflicts:
                     conflicted_files = [c.path for c in repo.index.conflicts]
-                    raise MergeConflictError(conflicted_files=conflicted_files)
+                    raise MergeConflictError(conflicted_files=conflicted_files) from e
             elif "authentication" in str(e).lower():
-                raise AuthenticationError(message=str(e))
+                raise AuthenticationError(message=str(e)) from e
             else:
                 raise GitOperationError(
                     message=f"Pull failed: {str(e)}",
                     details=str(e),
-                )
+                ) from e
         except Exception as e:
             raise GitOperationError(
                 message=f"Pull failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def list_branches(
         self,
@@ -681,7 +717,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Create branch failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def delete_branch(
         self, path: Path, name: str, force: bool = False, remote: bool = False
@@ -702,7 +738,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Delete branch failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def checkout(self, path: Path, options: CheckoutOptions) -> None:
         """Checkout a branch or commit."""
@@ -727,7 +763,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Checkout failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def merge(self, path: Path, options: MergeOptions) -> MergeResult:
         """Merge branches."""
@@ -740,7 +776,7 @@ class GitPythonAdapter(GitAdapter):
             # Perform merge
             if options.fast_forward:
                 # Fast-forward only
-                result = repo.merge_tree(
+                result = repo.merge_tree(  # type: ignore[attr-defined]
                     repo.head.commit,
                     source_commit,
                     allow_fast_forward=True,
@@ -782,7 +818,7 @@ class GitPythonAdapter(GitAdapter):
                 raise GitOperationError(
                     message=f"Merge failed: {str(e)}",
                     details=str(e),
-                )
+                ) from e
 
     async def rebase(self, path: Path, options: RebaseOptions) -> None:
         """Rebase current branch onto another."""
@@ -802,7 +838,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Rebase failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def log(self, path: Path, options: LogOptions | None = None) -> list[CommitInfo]:
         """Get commit history."""
@@ -854,7 +890,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Log failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def show(self, path: Path, revision: str, path_filter: Path | None = None) -> DiffInfo:
         """Show a specific commit."""
@@ -878,7 +914,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Show failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def diff(self, path: Path, options: DiffOptions) -> list[DiffInfo]:
         """Show differences."""
@@ -914,25 +950,28 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Diff failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def blame(self, options: BlameOptions) -> list[BlameLine]:
         """Show who last modified each line of a file."""
-        path = sanitize_path(options.path)
+        path = sanitize_path(options.path, options.path.parent)
 
         try:
             repo = Repo(str(path.parent))
-            blame = repo.blame(options.path)
+            # Get relative path from repository root
+            repo_root = Path(repo.working_dir)
+            relative_path = path.relative_to(repo_root)
+            blame = repo.blame("HEAD", str(relative_path))  # type: ignore[call-arg]
 
             lines = []
-            for line_commit, line_no in blame:
+            for line_commit, line_no in blame:  # type: ignore[misc, union-attr]
                 lines.append(
                     BlameLine(
-                        line_number=line_no,
-                        commit_oid=line_commit.hexsha,
-                        author=line_commit.author.name,
-                        date=datetime.fromtimestamp(line_commit.authored_date),
-                        summary=line_commit.message.split("\n")[0],
+                        line_number=line_no,  # type: ignore[arg-type]
+                        commit_oid=line_commit.hexsha,  # type: ignore[union-attr]
+                        author=str(line_commit.author.name),  # type: ignore[union-attr]
+                        date=datetime.fromtimestamp(line_commit.authored_date),  # type: ignore[union-attr]
+                        summary=str(line_commit.message).split("\n")[0],  # type: ignore[union-attr]
                     )
                 )
 
@@ -942,7 +981,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Blame failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def stash(self, path: Path, options: StashOptions) -> str | None:
         """Stash changes."""
@@ -958,7 +997,7 @@ class GitPythonAdapter(GitAdapter):
 
                 result = repo.git.stash(*stash_args)
                 if "No local changes to save" not in result:
-                    return result.split("\n")[0]
+                    return str(result.split("\n")[0])
 
             elif options.pop:
                 repo.git.stash("pop")
@@ -978,7 +1017,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Stash failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def list_stash(self, path: Path) -> list[dict[str, Any]]:
         """List stash entries."""
@@ -1007,7 +1046,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"List stash failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def list_tags(self, path: Path) -> list[str]:
         """List tags."""
@@ -1020,7 +1059,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"List tags failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def create_tag(self, path: Path, options: TagOptions) -> None:
         """Create a tag."""
@@ -1036,7 +1075,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Create tag failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def delete_tag(self, path: Path, name: str) -> None:
         """Delete a tag."""
@@ -1050,7 +1089,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Delete tag failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def list_remotes(self, path: Path) -> list[dict[str, str]]:
         """List remote repositories."""
@@ -1071,7 +1110,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"List remotes failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def add_remote(self, path: Path, name: str, url: str) -> None:
         """Add a remote repository."""
@@ -1084,7 +1123,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Add remote failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def remove_remote(self, path: Path, name: str) -> None:
         """Remove a remote repository."""
@@ -1098,7 +1137,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Remove remote failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def get_head_commit(self, path: Path) -> CommitInfo | None:
         """Get the current HEAD commit."""
@@ -1108,9 +1147,9 @@ class GitPythonAdapter(GitAdapter):
 
             return CommitInfo(
                 oid=commit.hexsha,
-                message=commit.message,
-                author_name=commit.author.name,
-                author_email=commit.author.email,
+                message=str(commit.message),
+                author_name=str(commit.author.name),
+                author_email=str(commit.author.email),
                 commit_time=datetime.fromtimestamp(commit.authored_date),
                 parent_oids=[p.hexsha for p in commit.parents],
             )
@@ -1178,7 +1217,7 @@ class GitPythonAdapter(GitAdapter):
                     message="Git LFS is not installed",
                     details="Please install Git LFS (https://git-lfs.github.io/)",
                     suggestion="Run: git lfs install",
-                )
+                ) from None
 
             # Initialize LFS
             repo.git.lfs("install")
@@ -1187,7 +1226,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Git LFS initialization failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def lfs_track(self, path: Path, patterns: list[str], lockable: bool = False) -> list[str]:
         """Track files with Git LFS."""
@@ -1214,7 +1253,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Git LFS track failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def lfs_untrack(self, path: Path, patterns: list[str]) -> list[str]:
         """Stop tracking files with Git LFS."""
@@ -1239,7 +1278,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Git LFS untrack failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def lfs_status(self, path: Path) -> list["LfsFileInfo"]:
         """Show Git LFS status and tracked files."""
@@ -1290,7 +1329,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Git LFS status failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def lfs_pull(
         self, path: Path, objects: list[str] | None = None, all: bool = True
@@ -1309,7 +1348,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Git LFS pull failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def lfs_push(self, path: Path, remote: str = "origin", all: bool = True) -> None:
         """Push LFS objects to the remote repository."""
@@ -1326,7 +1365,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Git LFS push failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def lfs_fetch(self, path: Path, objects: list[str] | None = None) -> None:
         """Fetch LFS objects from the remote without merging."""
@@ -1343,7 +1382,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Git LFS fetch failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def lfs_install(self, path: Path) -> None:
         """Install Git LFS hooks in the repository."""
@@ -1356,7 +1395,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Git LFS install failed: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     # Submodule operations
 
@@ -1389,7 +1428,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Failed to add submodule: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def update_submodule(
         self,
@@ -1410,7 +1449,7 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Failed to update submodule: {str(e)}",
                 details=str(e),
-            )
+            ) from e
 
     async def deinit_submodule(
         self,
@@ -1435,7 +1474,72 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Failed to deinitialize submodule: {str(e)}",
                 details=str(e),
+            ) from e
+
+    async def sparse_checkout(
+        self,
+        path: Path,
+        options: "SparseCheckoutOptions",
+    ) -> list[str]:
+        """Configure sparse checkout for a repository.
+
+        Sparse checkout allows you to only checkout specific paths in a repository,
+        reducing disk usage for large repositories.
+
+        Args:
+            path: Repository path
+            options: Sparse checkout options with paths and mode
+
+        Returns:
+            List of paths currently configured in sparse checkout
+        """
+        repo = await self._get_repo(path)
+        working_tree_dir = repo.working_tree_dir
+        if working_tree_dir is None:
+            raise GitOperationError(
+                message="Repository has no working tree",
+                details="Cannot perform sparse checkout on a bare repository",
             )
+        sparse_dir = Path(working_tree_dir) / ".git" / "info" / "sparse-checkout"
+        sparse_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        # Read existing paths
+        current_paths: list[str] = []
+        if sparse_dir.exists():
+            with open(sparse_dir) as f:
+                current_paths = [line.strip() for line in f.readlines() if line.strip()]
+
+        # Apply mode
+        if options.mode == "replace":
+            # Replace all paths
+            current_paths = list(options.paths)
+        elif options.mode == "add":
+            # Add new paths to existing
+            for p in options.paths:
+                if p not in current_paths:
+                    current_paths.append(p)
+        elif options.mode == "remove":
+            # Remove specified paths
+            current_paths = [p for p in current_paths if p not in options.paths]
+        else:
+            raise GitOperationError(
+                message=f"Invalid sparse checkout mode: {options.mode}",
+                details="Mode must be one of: replace, add, remove",
+                suggestion="Use mode='replace' to set new paths, mode='add' to add paths, or mode='remove' to remove paths",
+            ) from None
+
+        # Write sparse-checkout file
+        with open(sparse_dir, "w") as f:
+            for p in current_paths:
+                f.write(f"{p}\n")
+
+        # Enable or disable sparse checkout based on whether paths exist
+        if current_paths:
+            repo.git.config("core.sparseCheckout", "true")
+        else:
+            repo.git.config("--unset", "core.sparseCheckout")
+
+        return current_paths
 
     async def list_submodules(self, path: Path) -> list["SubmoduleInfo"]:
         """List submodules in the repository."""
@@ -1483,4 +1587,4 @@ class GitPythonAdapter(GitAdapter):
             raise GitOperationError(
                 message=f"Failed to list submodules: {str(e)}",
                 details=str(e),
-            )
+            ) from e

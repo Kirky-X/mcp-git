@@ -5,7 +5,8 @@ This module implements the handlers for all MCP tools.
 """
 
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from uuid import UUID
 
 from loguru import logger

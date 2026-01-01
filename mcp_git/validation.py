@@ -6,7 +6,6 @@ to prevent security issues and ensure data integrity.
 """
 
 from functools import wraps
-from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel, ValidationError
@@ -43,7 +42,7 @@ def validate_args(schema: type[BaseModel]):
                 return await func(*args, **kwargs)
             except ValidationError as e:
                 logger.error(f"Validation error for {func.__name__}: {e}")
-                raise ValueError(f"Invalid arguments: {e}")
+                raise ValueError(f"Invalid arguments: {e}") from e
 
         return wrapper
 

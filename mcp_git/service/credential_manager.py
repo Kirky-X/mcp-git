@@ -103,7 +103,7 @@ class CredentialManager:
 
                 with open(self._audit_log_path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(event) + "\n")
-            except (IOError, OSError, PermissionError) as e:
+            except (OSError, PermissionError) as e:
                     logger.error(f"Failed to write to audit log: {e}")
                     logger.debug(f"Audit log path: {self._audit_log_path}")
         # Log to application logger

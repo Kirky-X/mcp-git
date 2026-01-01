@@ -5,8 +5,7 @@ Provides a decorator-based registration system for tool handlers,
 replacing the large if-elif chain with dictionary-based routing.
 """
 
-from functools import wraps
-from typing import Any, Callable
+from collections.abc import Callable
 
 from loguru import logger
 

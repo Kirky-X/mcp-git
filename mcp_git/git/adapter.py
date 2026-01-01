@@ -173,6 +173,14 @@ class LfsOptions:
 
 
 @dataclass
+class SparseCheckoutOptions:
+    """Options for sparse checkout operations."""
+
+    paths: list[str]  # List of paths to include in checkout
+    mode: str = "replace"  # "replace" | "add" | "remove"
+
+
+@dataclass
 class LfsFileInfo:
     """Information about an LFS-tracked file."""
 
@@ -916,6 +924,26 @@ class GitAdapter(ABC):
         """
         ...
 
+    @abstractmethod
+    async def sparse_checkout(
+        self,
+        path: Path,
+        options: SparseCheckoutOptions,
+    ) -> list[str]:
+        """Configure sparse checkout for a repository.
+
+        Sparse checkout allows you to only checkout specific paths in a repository,
+        reducing disk usage for large repositories.
+
+        Args:
+            path: Repository path
+            options: Sparse checkout options with paths and mode
+
+        Returns:
+            List of paths currently configured in sparse checkout
+        """
+        ...
+
 
 @dataclass
 class SubmoduleOptions:
@@ -939,70 +967,3 @@ class SubmoduleInfo:
     branch: str  # Branch being tracked
     commit_oid: str  # Current commit OID
     status: str  # Status (e.g., "clean", "modified")
-
-
-class GitAdapter(ABC):
-    """Abstract interface for Git operations."""
-
-    # ... existing methods ...
-
-    @abstractmethod
-    async def add_submodule(
-        self,
-        path: Path,
-        options: SubmoduleOptions,
-    ) -> None:
-        """Add a submodule to the repository.
-
-        Args:
-            path: Repository path
-            options: Submodule options
-        """
-        ...
-
-    @abstractmethod
-    async def update_submodule(
-        self,
-        path: Path,
-        name: str | None = None,
-        init: bool = True,
-    ) -> None:
-        """Update a submodule.
-
-        Args:
-            path: Repository path
-            name: Submodule name/path (optional, updates all if not specified)
-            init: Initialize submodules if not already
-        """
-        ...
-
-    @abstractmethod
-    async def deinit_submodule(
-        self,
-        path: Path,
-        name: str | None = None,
-        force: bool = False,
-    ) -> None:
-        """Deinitialize a submodule.
-
-        Args:
-            path: Repository path
-            name: Submodule name/path (optional, deinits all if not specified)
-            force: Force deinitialization even with local changes
-        """
-        ...
-
-    @abstractmethod
-    async def list_submodules(
-        self,
-        path: Path,
-    ) -> list[SubmoduleInfo]:
-        """List submodules in the repository.
-
-        Args:
-            path: Repository path
-
-        Returns:
-            List of SubmoduleInfo
-        """
-        ...

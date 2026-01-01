@@ -876,6 +876,40 @@ LFS_INSTALL = Tool(
     },
 )
 
+SPARSE_CHECKOUT = Tool(
+    name="git_sparse_checkout",
+    description=(
+        "Configure sparse checkout for a repository. "
+        "Sparse checkout allows you to only checkout specific paths in a repository, "
+        "reducing disk usage for large repositories. "
+        "Use mode='replace' to set new paths (overwrites existing), "
+        "mode='add' to add to existing paths, "
+        "or mode='remove' to remove specific paths. "
+        "To disable sparse checkout, set paths=[] with mode='replace'."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "workspace_id": {
+                "type": "string",
+                "description": "Workspace ID",
+            },
+            "paths": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Paths to include in checkout (e.g., ['src/', 'README.md'])",
+            },
+            "mode": {
+                "type": "string",
+                "description": "Operation mode: 'replace' (default), 'add', or 'remove'",
+                "enum": ["replace", "add", "remove"],
+                "default": "replace",
+            },
+        },
+        "required": ["workspace_id", "paths"],
+    },
+)
+
 # Submodule operations
 SUBMODULE_ADD = Tool(
     name="git_submodule_add",
@@ -1087,6 +1121,7 @@ ALL_TOOLS = [
     LFS_PUSH,
     LFS_FETCH,
     LFS_INSTALL,
+    SPARSE_CHECKOUT,
     # Submodules
     SUBMODULE_ADD,
     SUBMODULE_UPDATE,

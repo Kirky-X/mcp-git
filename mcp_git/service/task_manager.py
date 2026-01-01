@@ -6,8 +6,9 @@ timeout handling, and result retention.
 """
 
 import asyncio
-from collections.abc import Callable
-from datetime import datetime
+from collections.abc import Callable, Coroutine
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -20,6 +21,8 @@ from mcp_git.storage.models import (
     TaskResult,
     TaskStatus,
 )
+
+UTC = timezone.utc
 
 
 class TaskConfig:
@@ -162,11 +165,11 @@ class TaskManager:
             id=uuid4(),
             operation=operation,
             status=TaskStatus.QUEUED,
-            workspace_path=workspace_path,
+            workspace_path=Path(workspace_path) if workspace_path else None,
             params=params,
             progress=0,
             priority=priority,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
 
         await self.storage.create_task(task)
@@ -217,6 +220,8 @@ class TaskManager:
         progress: int | None = None,
         result: dict[str, Any] | None = None,
         error_message: str | None = None,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
     ) -> bool:
         """
         Update task status.
@@ -227,6 +232,8 @@ class TaskManager:
             progress: Optional progress value (0-100)
             result: Optional result data
             error_message: Optional error message
+            started_at: Optional started timestamp
+            completed_at: Optional completed timestamp
 
         Returns:
             True if updated, False if not found
@@ -242,10 +249,15 @@ class TaskManager:
         if error_message is not None:
             updates["error_message"] = error_message
 
-        if status == TaskStatus.RUNNING:
-            updates["started_at"] = datetime.utcnow()
+        if started_at is not None:
+            updates["started_at"] = started_at
+        elif status == TaskStatus.RUNNING:
+            updates["started_at"] = datetime.now(UTC)
+
+        if completed_at is not None:
+            updates["completed_at"] = completed_at
         elif status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
-            updates["completed_at"] = datetime.utcnow()
+            updates["completed_at"] = datetime.now(UTC)
 
         return await self.storage.update_task(task_id, **updates)
 
@@ -263,7 +275,7 @@ class TaskManager:
         if task is None or task.status != TaskStatus.QUEUED:
             return False
 
-        await self.update_task_status(task_id, TaskStatus.RUNNING, started_at=datetime.utcnow())
+        await self.update_task_status(task_id, TaskStatus.RUNNING, started_at=datetime.now(UTC))
 
         logger.info("Task started", task_id=str(task_id))
 
@@ -295,7 +307,7 @@ class TaskManager:
             TaskStatus.COMPLETED,
             progress=100,
             result=result,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(UTC),
         )
 
         if success:
@@ -331,7 +343,7 @@ class TaskManager:
             task_id,
             TaskStatus.FAILED,
             error_message=error_message,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(UTC),
         )
 
         if success:
@@ -368,7 +380,7 @@ class TaskManager:
         success = await self.update_task_status(
             task_id,
             TaskStatus.CANCELLED,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(UTC),
         )
 
         if success:
@@ -379,7 +391,7 @@ class TaskManager:
     async def submit_task(
         self,
         task_id: UUID,
-        coroutine: "asyncio.coroutines.Coroutine",
+        coroutine: Coroutine[Any, Any, Any],
     ) -> bool:
         """
         Submit a task for execution.
@@ -397,7 +409,9 @@ class TaskManager:
         if task is None:
             return False
 
-        async def run_with_semaphore():
+        async def run_with_semaphore() -> None:
+            if self._semaphore is None:
+                raise RuntimeError("TaskManager not started. Call start() first.")
             async with self._semaphore:
                 await self._execute_task(task_id, coroutine)
 
@@ -408,7 +422,7 @@ class TaskManager:
     async def _execute_task(
         self,
         task_id: UUID,
-        coroutine: "asyncio.coroutines.Coroutine",
+        coroutine: Coroutine[Any, Any, Any],
     ) -> None:
         """Execute a task with error handling and timeout."""
         try:
@@ -437,7 +451,7 @@ class TaskManager:
             await self.update_task_status(
                 task_id,
                 TaskStatus.CANCELLED,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(UTC),
             )
             self._active_tasks.pop(task_id, None)
         except Exception as e:
@@ -493,14 +507,22 @@ class TaskManager:
         """
         return await self.storage.get_pending_tasks(limit)
 
-    async def cleanup_expired_tasks(self) -> int:
+    async def cleanup_expired_tasks(self, retention_seconds: int | None = None) -> int:
         """
         Clean up expired tasks.
+
+        Args:
+            retention_seconds: Optional retention time in seconds, defaults to config value
 
         Returns:
             Number of cleaned up tasks
         """
-        return await self.storage.cleanup_expired_tasks(self.config.result_retention_seconds)
+        retention = (
+            retention_seconds
+            if retention_seconds is not None
+            else self.config.result_retention_seconds
+        )
+        return await self.storage.cleanup_expired_tasks(retention)
 
     async def _cleanup_loop(self) -> None:
         """Background task for periodic cleanup."""
@@ -529,7 +551,7 @@ class TaskManager:
 
             db_task = await self.storage.get_task(task_id)
             if db_task and db_task.started_at:
-                elapsed = (datetime.utcnow() - db_task.started_at).total_seconds()
+                elapsed = (datetime.now(UTC) - db_task.started_at).total_seconds()
                 if elapsed > self.config.task_timeout_seconds:
                     logger.warning("Task timeout detected", task_id=str(task_id))
                     task.cancel()

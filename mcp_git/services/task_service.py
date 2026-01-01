@@ -9,9 +9,9 @@ from uuid import UUID
 
 from loguru import logger
 
+from mcp_git.service.task_manager import TaskManager
 from mcp_git.services.service_interface import TaskServiceInterface
 from mcp_git.storage.models import Task, TaskStatus
-from mcp_git.service.task_manager import TaskManager
 
 
 class TaskService(TaskServiceInterface):

@@ -4,7 +4,7 @@ Configuration management module for mcp-git.
 
 import os
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import field
 from enum import Enum
 from pathlib import Path
 
@@ -187,7 +187,7 @@ def load_config() -> Config:
 
     task_timeout = os.getenv("MCP_GIT_TASK_TIMEOUT")
     if task_timeout:
-        config.execution.task_timeout = int(task_timeout)
+        config.execution.task_timeout_seconds = int(task_timeout)
 
     worker_count = os.getenv("MCP_GIT_WORKER_COUNT")
     if worker_count:

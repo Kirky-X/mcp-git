@@ -1,13 +1,3 @@
-"""
-Distributed tracing module for mcp-git.
-
-This module provides distributed tracing functionality for observability.
-"""
-
-import contextvars
-import time
-import uuid
-from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
 from uuid import UUID

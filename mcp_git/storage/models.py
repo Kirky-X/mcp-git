@@ -3,11 +3,14 @@ Data models for mcp-git storage layer.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
+
+# Compatibility with Python 3.10
+UTC = timezone.utc
 
 
 class TaskStatus(str, Enum):
@@ -79,7 +82,7 @@ class Task:
         self.error_message = error_message
         self.progress = progress
         self.priority = priority
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(UTC)
         self.started_at = started_at
         self.completed_at = completed_at
 
@@ -143,7 +146,7 @@ class Task:
         if self.started_at is None:
             return None
 
-        end_time = self.completed_at or datetime.utcnow()
+        end_time = self.completed_at or datetime.now(UTC)
         return (end_time - self.started_at).total_seconds()
 
 
@@ -162,8 +165,8 @@ class Workspace:
         self.id = id or uuid4()
         self.path = path
         self.size_bytes = size_bytes
-        self.last_accessed_at = last_accessed_at or datetime.utcnow()
-        self.created_at = created_at or datetime.utcnow()
+        self.last_accessed_at = last_accessed_at or datetime.now(UTC)
+        self.created_at = created_at or datetime.now(UTC)
         self.metadata = metadata or {}
 
     def to_dict(self) -> dict[str, Any]:
@@ -213,7 +216,7 @@ class OperationLog:
         self.operation = operation
         self.level = level
         self.message = message
-        self.timestamp = timestamp or datetime.utcnow()
+        self.timestamp = timestamp or datetime.now(UTC)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

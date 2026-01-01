@@ -4,7 +4,6 @@ Storage service implementation.
 This module provides the storage service for the microservices architecture.
 """
 
-from typing import Any
 from uuid import UUID
 
 from loguru import logger

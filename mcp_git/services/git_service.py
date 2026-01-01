@@ -9,8 +9,8 @@ from uuid import UUID
 
 from loguru import logger
 
-from mcp_git.services.service_interface import GitServiceInterface
 from mcp_git.service.facade import GitServiceFacade
+from mcp_git.services.service_interface import GitServiceInterface
 
 
 class GitService(GitServiceInterface):

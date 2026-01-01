@@ -121,7 +121,7 @@ def get_prometheus_metrics() -> str:
     return "\n".join(output)
 
 
-def update_workspace_metrics(workspace_path: Path, max_size_bytes: int):
+def update_workspace_metrics(workspace_path: Path, max_size_bytes: int) -> None:
     """Update workspace-related metrics."""
 
     total_size = 0

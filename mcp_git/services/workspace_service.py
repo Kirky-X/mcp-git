@@ -4,14 +4,13 @@ Workspace management service implementation.
 This module provides the workspace management service for the microservices architecture.
 """
 
-from typing import Any
 from uuid import UUID
 
 from loguru import logger
 
+from mcp_git.service.workspace_manager import WorkspaceManager
 from mcp_git.services.service_interface import WorkspaceServiceInterface
 from mcp_git.storage.models import Workspace
-from mcp_git.service.workspace_manager import WorkspaceManager
 
 
 class WorkspaceService(WorkspaceServiceInterface):
