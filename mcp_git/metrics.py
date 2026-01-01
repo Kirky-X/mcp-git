@@ -232,7 +232,7 @@ class Cache:
         self._use_moka = False
 
         try:
-            from moka import MokaCache
+            from moka import MokaCache  # type: ignore[import-untyped]
 
             self._cache = MokaCache(
                 max_capacity=max_size,

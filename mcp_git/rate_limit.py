@@ -202,7 +202,7 @@ class SlidingWindowRateLimiter:
             oldest = requests[0]
             window_end = oldest + self.config.window_seconds
             wait_time = max(0.0, window_end - time.time())
-            return wait_time
+            return wait_time  # type: ignore[no-any-return]
 
     def reset(self, identifier: str) -> None:
         """
@@ -249,8 +249,8 @@ class RateLimitMiddleware:
         """
         # Try to get IP address or use a default
         if hasattr(request, "client") and hasattr(request.client, "host"):
-            return request.client.host
-        return "default"
+            return request.client.host  # type: ignore[no-any-return]
+        return "default"  # type: ignore[no-any-return]
 
     async def before_request(self, request: Any) -> tuple[bool, str | None]:
         """

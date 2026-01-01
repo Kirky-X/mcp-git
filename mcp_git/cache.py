@@ -118,7 +118,7 @@ class RepoMetadataCache:
         self._use_moka = False
 
         try:
-            from moka import MokaCache
+            from moka import MokaCache  # type: ignore[import-untyped]
 
             self._cache = MokaCache(
                 max_capacity=max_entries,
@@ -161,7 +161,7 @@ class RepoMetadataCache:
             metadata = self._cache.get(cache_key)
             if metadata is not None and metadata.is_valid():
                 metrics.record_cache_hit("repo_metadata")
-                return metadata
+                return metadata  # type: ignore[no-any-return]
             elif metadata is not None:
                 # Expired, moka will handle it automatically
                 metrics.record_cache_miss("repo_metadata")
@@ -176,7 +176,7 @@ class RepoMetadataCache:
                     metadata = self._cache[cache_key]
                     if metadata.is_valid():
                         metrics.record_cache_hit("repo_metadata")
-                        return metadata
+                        return metadata  # type: ignore[no-any-return]
                     else:
                         # Expired, remove from cache
                         del self._cache[cache_key]
