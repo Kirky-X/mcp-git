@@ -34,19 +34,10 @@ class RemoteOperations:
         Returns:
             List of remote information
         """
-        remotes = await self.adapter.list_remotes(repo_path)
-        return [
-            {
-                "name": remote.name,
-                "url": remote.url,
-                "fetch_url": remote.fetch_url,
-                "push_url": remote.push_url,
-            }
-            for remote in remotes
-        ]
+        return await self.adapter.list_remotes(repo_path)
 
     async def add_remote(
-        self, repo_path: Path, name: str, url: str, fetch: str = "+refs/heads/*:refs/remotes/{name}/*"
+        self, repo_path: Path, name: str, url: str
     ) -> None:
         """
         Add a remote.
@@ -55,9 +46,8 @@ class RemoteOperations:
             repo_path: Path to the repository
             name: Remote name
             url: Remote URL
-            fetch: Fetch refspec
         """
-        await self.adapter.add_remote(repo_path, name, url, fetch=fetch)
+        await self.adapter.add_remote(repo_path, name, url)
         logger.info(f"Added remote {name} ({url}) to {repo_path}")
 
     async def remove_remote(self, repo_path: Path, name: str) -> None:

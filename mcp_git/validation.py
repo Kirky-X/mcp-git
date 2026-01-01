@@ -5,7 +5,9 @@ Provides decorators and utilities for validating input arguments
 to prevent security issues and ensure data integrity.
 """
 
+from collections.abc import Callable
 from functools import wraps
+from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel, ValidationError
@@ -33,9 +35,9 @@ def validate_args(schema: type[BaseModel]):
             pass
     """
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 # Validate arguments against schema
                 schema(**kwargs)
@@ -61,9 +63,9 @@ def validate_length(field_name: str, max_length: int):
         Decorator function
     """
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             value = kwargs.get(field_name)
             if value and isinstance(value, str) and len(value) > max_length:
                 raise ValueError(
@@ -87,9 +89,9 @@ def validate_not_empty(field_name: str):
         Decorator function
     """
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             value = kwargs.get(field_name)
             if value is None or (isinstance(value, str) and not value.strip()):
                 raise ValueError(f"{field_name} cannot be empty")
