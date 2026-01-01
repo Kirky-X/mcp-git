@@ -22,7 +22,7 @@ from mcp_git.error import (
 from mcp_git.error_sanitizer import error_sanitizer
 
 # Tool handler registry for O(1) lookup
-TOOL_HANDLER_REGISTRY: dict[str, Callable] = {}
+TOOL_HANDLER_REGISTRY: dict[str, Callable[[Any, dict[str, Any]], list[TextContent]]] = {}
 
 
 def format_error(error: Exception) -> str:

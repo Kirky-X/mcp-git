@@ -130,7 +130,7 @@ class StorageServiceInterface(ABC):
     async def update_workspace(
         self,
         workspace_id: UUID,
-        **kwargs,
+        **kwargs: Any,
     ) -> bool:
         """Update workspace."""
         pass

@@ -84,7 +84,7 @@ class McpGitServer:
 
             task_config = TaskConfig(
                 max_concurrent_tasks=self.config.execution.max_concurrent_tasks,
-                task_timeout_seconds=self.config.execution.task_timeout,
+                task_timeout_seconds=self.config.execution.task_timeout_seconds,
                 result_retention_seconds=self.config.database.task_retention_seconds,
             )
 
@@ -129,7 +129,8 @@ class McpGitServer:
         # Check facade health if available
         if self.facade:
             try:
-                health["components"]["workers"] = f"{len(self.facade.worker_pool._workers)} active"
+                workers = self.facade.task_manager.worker_pool
+                health["components"]["workers"] = f"{len(workers._workers)} active"
             except Exception:
                 health["components"]["workers"] = "unknown"
 

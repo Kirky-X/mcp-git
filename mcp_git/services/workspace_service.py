@@ -76,18 +76,22 @@ class WorkspaceService(WorkspaceServiceInterface):
         """
         logger.debug("Getting workspace size", workspace_id=str(workspace_id))
 
-        return await self.workspace_manager.get_workspace_size(workspace_id)
+        workspace = await self.workspace_manager.get_workspace(workspace_id)
+        if workspace is None:
+            raise ValueError(f"Workspace not found: {workspace_id}")
 
-    async def cleanup_expired_workspaces(self) -> int:
+        return workspace.size_bytes
+
+    async def cleanup_expired_workspaces(self) -> tuple[int, int]:
         """
         Clean up expired workspaces.
 
         Returns:
-            Number of workspaces cleaned up
+            Tuple of (cleaned_count, freed_space)
         """
         logger.info("Cleaning up expired workspaces")
 
         cleaned = await self.workspace_manager.cleanup_expired_workspaces()
 
-        logger.info("Cleanup completed", count=cleaned)
+        logger.info("Cleanup completed", count=cleaned[0], freed_space=cleaned[1])
         return cleaned
