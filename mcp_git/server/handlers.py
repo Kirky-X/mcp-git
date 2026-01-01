@@ -18,27 +18,33 @@ from mcp_git.error import (
     MergeConflictError,
     RepositoryNotFoundError,
 )
+from mcp_git.error_sanitizer import error_sanitizer
 
 # Tool handler registry for O(1) lookup
 TOOL_HANDLER_REGISTRY: dict[str, Callable] = {}
 
 
 def format_error(error: Exception) -> str:
-    """Format an error for MCP response."""
+    """Format an error for MCP response with sensitive information sanitized."""
     if isinstance(error, RepositoryNotFoundError):
-        return f"Repository not found: {error.message}"
+        sanitized_message = error_sanitizer.sanitize(error.message)
+        return f"Repository not found: {sanitized_message}"
     elif isinstance(error, AuthenticationError):
-        return f"Authentication failed: {error.message}"
+        sanitized_message = error_sanitizer.sanitize(error.message)
+        return f"Authentication failed: {sanitized_message}"
     elif isinstance(error, MergeConflictError):
         conflicts = ", ".join(error.conflicted_files)
         return f"Merge conflict: {conflicts}"
     elif isinstance(error, GitOperationError):
+        sanitized_message = error_sanitizer.sanitize(error.message)
         suggestion = f"\n\nSuggestion: {error.suggestion}" if error.suggestion else ""
-        return f"Git operation error: {error.message}{suggestion}"
+        return f"Git operation error: {sanitized_message}{suggestion}"
     elif isinstance(error, McpGitError):
-        return f"Error: {error.message}"
+        sanitized_message = error_sanitizer.sanitize(error.message)
+        return f"Error: {sanitized_message}"
     else:
-        return f"Unexpected error: {str(error)}"
+        sanitized_message = error_sanitizer.sanitize(str(error))
+        return f"Unexpected error: {sanitized_message}"
 
 
 def register_tool_handler(name: str, handler: Callable) -> None:
