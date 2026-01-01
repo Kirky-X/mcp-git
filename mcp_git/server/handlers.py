@@ -84,7 +84,9 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
         handler = TOOL_HANDLER_REGISTRY.get(name)
         if handler:
             result = await handler(server, arguments)
-            return result  # type: ignore[return-value]
+            if isinstance(result, list):
+                return result  # type: ignore[return-value]
+            return [TextContent(type="text", text=str(result))]  # type: ignore[return-value]
 
         # Fallback to if-elif chain for unregistered tools
         # Workspace operations
