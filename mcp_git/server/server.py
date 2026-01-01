@@ -16,7 +16,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from mcp_git.config import Config, load_config
-from mcp_git.error import McpGitError
+from mcp_git.error import ErrorCode, McpGitError
 from mcp_git.service.facade import GitServiceFacade
 from mcp_git.service.task_manager import TaskConfig
 from mcp_git.service.workspace_manager import WorkspaceConfig
@@ -95,7 +95,39 @@ class McpGitServer:
 
         await self.facade.start()
 
+        # Start metrics server
+        from mcp_git.metrics import start_metrics_server
+
+        metrics_port = 9090
+        start_metrics_server(metrics_port)
+        logger.info(f"Metrics server started on port {metrics_port}")
+
         logger.info("MCP server initialized")
+
+    async def get_health(self) -> dict[str, Any]:
+        """
+        Get server health status.
+
+        Returns:
+            Dictionary containing health status information
+        """
+        health = {
+            "status": "healthy",
+            "components": {
+                "storage": "ok" if self._storage_initialized else "not_initialized",
+                "facade": "ok" if self.facade else "not_initialized",
+            },
+            "version": "1.0.0",
+        }
+
+        # Check facade health if available
+        if self.facade:
+            try:
+                health["components"]["workers"] = f"{len(self.facade.worker_pool._workers)} active"
+            except Exception:
+                health["components"]["workers"] = "unknown"
+
+        return health
 
     async def shutdown(self) -> None:
         """Shutdown server components."""
@@ -126,7 +158,7 @@ class McpGitServer:
         # Handle shutdown signals
         loop = asyncio.get_event_loop()
 
-        def signal_handler():
+        def signal_handler() -> None:
             logger.info("Received shutdown signal")
             asyncio.create_task(self.shutdown())
 
@@ -151,7 +183,7 @@ class McpGitServer:
             Workspace information
         """
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.allocate_workspace()
 
     async def get_workspace(self, workspace_id: UUID) -> dict[str, Any] | None:
@@ -165,7 +197,7 @@ class McpGitServer:
             Workspace information or None
         """
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.get_workspace(workspace_id)
 
     async def release_workspace(self, workspace_id: UUID) -> bool:
@@ -179,7 +211,7 @@ class McpGitServer:
             True if released
         """
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.release_workspace(workspace_id)
 
     async def list_workspaces(self) -> list[dict[str, Any]]:
@@ -190,7 +222,7 @@ class McpGitServer:
             List of workspace information
         """
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.list_workspaces()
 
     # Git operations
@@ -215,7 +247,7 @@ class McpGitServer:
             Clone result
         """
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
 
         from mcp_git.git.adapter import CloneOptions
 
@@ -235,13 +267,13 @@ class McpGitServer:
     ) -> None:
         """Initialize a repository."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.init(workspace_id, bare, default_branch)
 
     async def get_status(self, workspace_id: UUID) -> list[dict[str, Any]]:
         """Get repository status."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.status(workspace_id)
 
     async def stage_files(
@@ -251,7 +283,7 @@ class McpGitServer:
     ) -> None:
         """Stage files."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.add(workspace_id, files)
 
     async def create_commit(
@@ -263,7 +295,7 @@ class McpGitServer:
     ) -> str:
         """Create a commit."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.commit(workspace_id, message, author_name, author_email)
 
     async def push(
@@ -275,7 +307,7 @@ class McpGitServer:
     ) -> None:
         """Push to remote."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.push(workspace_id, remote, branch, force)
 
     async def pull(
@@ -287,7 +319,7 @@ class McpGitServer:
     ) -> None:
         """Pull from remote."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.pull(workspace_id, remote, branch, rebase)
 
     async def fetch(
@@ -298,7 +330,7 @@ class McpGitServer:
     ) -> None:
         """Fetch from remote."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.fetch(workspace_id, remote, tags)
 
     async def checkout(
@@ -310,7 +342,7 @@ class McpGitServer:
     ) -> None:
         """Checkout a branch."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.checkout(workspace_id, branch, create_new, force)
 
     async def list_branches(
@@ -322,7 +354,7 @@ class McpGitServer:
     ) -> list[dict[str, Any]]:
         """List branches."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.list_branches(workspace_id, local, remote, all)
 
     async def create_branch(
@@ -334,7 +366,7 @@ class McpGitServer:
     ) -> None:
         """Create a branch."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.create_branch(workspace_id, name, revision, force)
 
     async def delete_branch(
@@ -346,7 +378,7 @@ class McpGitServer:
     ) -> None:
         """Delete a branch."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.delete_branch(workspace_id, name, force, remote)
 
     async def merge(
@@ -357,7 +389,7 @@ class McpGitServer:
     ) -> dict[str, Any]:
         """Merge branches."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.merge(workspace_id, source_branch, fast_forward)
 
     async def rebase(
@@ -369,7 +401,7 @@ class McpGitServer:
     ) -> None:
         """Rebase branch."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.rebase(workspace_id, branch, abort, continue_rebase)
 
     async def get_log(
@@ -381,7 +413,7 @@ class McpGitServer:
     ) -> list[dict[str, Any]]:
         """Get commit log."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.log(workspace_id, max_count, None, None, author, all)
 
     async def show_commit(
@@ -391,7 +423,7 @@ class McpGitServer:
     ) -> dict[str, Any]:
         """Show a commit."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.show(workspace_id, revision)
 
     async def get_diff(
@@ -402,7 +434,7 @@ class McpGitServer:
     ) -> list[dict[str, Any]]:
         """Get diff."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.diff(workspace_id, cached, commit_oid)
 
     async def get_blame(
@@ -412,7 +444,7 @@ class McpGitServer:
     ) -> list[dict[str, Any]]:
         """Get blame information."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.blame(workspace_id, path)
 
     async def stash_changes(
@@ -427,7 +459,7 @@ class McpGitServer:
     ) -> str | None:
         """Stash changes."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.stash(
             workspace_id, save, pop, apply, drop, False, message, include_untracked
         )
@@ -435,13 +467,13 @@ class McpGitServer:
     async def list_stash(self, workspace_id: UUID) -> list[dict[str, Any]]:
         """List stash entries."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.list_stash(workspace_id)
 
     async def list_tags(self, workspace_id: UUID) -> list[str]:
         """List tags."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.list_tags(workspace_id)
 
     async def create_tag(
@@ -453,19 +485,19 @@ class McpGitServer:
     ) -> None:
         """Create a tag."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.create_tag(workspace_id, name, message, force)
 
     async def delete_tag(self, workspace_id: UUID, name: str) -> None:
         """Delete a tag."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.delete_tag(workspace_id, name)
 
     async def list_remotes(self, workspace_id: UUID) -> list[dict[str, str]]:
         """List remotes."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.list_remotes(workspace_id)
 
     async def add_remote(
@@ -476,13 +508,13 @@ class McpGitServer:
     ) -> None:
         """Add a remote."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.add_remote(workspace_id, name, url)
 
     async def remove_remote(self, workspace_id: UUID, name: str) -> None:
         """Remove a remote."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.remove_remote(workspace_id, name)
 
     # Git LFS operations
@@ -490,7 +522,7 @@ class McpGitServer:
     async def lfs_init(self, workspace_id: UUID) -> None:
         """Initialize Git LFS in a repository."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.lfs_init(workspace_id)
 
     async def lfs_track(
@@ -501,7 +533,7 @@ class McpGitServer:
     ) -> list[dict[str, Any]]:
         """Track files with Git LFS."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         result = await self.facade.lfs_track(workspace_id, patterns, lockable)
         return [{"pattern": p, "tracked": True} for p in result]
 
@@ -512,14 +544,14 @@ class McpGitServer:
     ) -> list[dict[str, Any]]:
         """Stop tracking files with Git LFS."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         result = await self.facade.lfs_untrack(workspace_id, patterns)
         return [{"pattern": p, "untracked": True} for p in result]
 
     async def lfs_status(self, workspace_id: UUID) -> list[dict[str, Any]]:
         """Show Git LFS status and tracked files."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.lfs_status(workspace_id)
 
     async def lfs_pull(
@@ -530,7 +562,7 @@ class McpGitServer:
     ) -> None:
         """Download LFS files from the remote repository."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.lfs_pull(workspace_id, objects, all)
 
     async def lfs_push(
@@ -541,7 +573,7 @@ class McpGitServer:
     ) -> None:
         """Push LFS objects to the remote repository."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.lfs_push(workspace_id, remote, all)
 
     async def lfs_fetch(
@@ -551,21 +583,32 @@ class McpGitServer:
     ) -> None:
         """Fetch LFS objects from the remote without merging."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.lfs_fetch(workspace_id, objects)
 
     async def lfs_install(self, workspace_id: UUID) -> None:
         """Install Git LFS hooks in the repository."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         await self.facade.lfs_install(workspace_id)
+
+    async def sparse_checkout(
+        self,
+        workspace_id: UUID,
+        paths: list[str],
+        mode: str = "replace",
+    ) -> list[str]:
+        """Configure sparse checkout for a repository."""
+        if not self.facade:
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
+        return await self.facade.sparse_checkout(workspace_id, paths, mode)
 
     # Task operations
 
     async def get_task(self, task_id: UUID) -> dict[str, Any] | None:
         """Get task information."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         task = await self.facade.get_task(task_id)
         if task:
             return {
@@ -586,7 +629,7 @@ class McpGitServer:
     ) -> list[dict[str, Any]]:
         """List tasks."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
 
         from mcp_git.storage.models import TaskStatus
 
@@ -602,7 +645,7 @@ class McpGitServer:
     async def cancel_task(self, task_id: UUID) -> bool:
         """Cancel a task."""
         if not self.facade:
-            raise McpGitError("Server not initialized")
+            raise McpGitError(code=ErrorCode.SYSTEM_ERROR, message="Server not initialized")
         return await self.facade.cancel_task(task_id)
 
     def get_stats(self) -> dict[str, Any]:
@@ -623,7 +666,7 @@ async def run_server(config: Config | None = None) -> None:
     await server.run()
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     import sys
 
