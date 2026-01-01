@@ -5,7 +5,6 @@ This module provides secure handling of Git credentials including
 tokens, SSH keys, and passwords.
 """
 
-import logging
 import os
 import time
 from datetime import datetime
@@ -14,9 +13,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from loguru import logger
 from pydantic import BaseModel, SecretStr
-
-logger = logging.getLogger(__name__)
 
 
 class AuthType(str, Enum):

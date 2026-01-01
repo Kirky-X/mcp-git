@@ -6,20 +6,17 @@ for the mcp-git server.
 """
 
 import asyncio
-import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Optional
 
+from loguru import logger
 from watchfiles import awatch
 
 from mcp_git.config import (
     Config,
     load_config,
 )
-
-logger = logging.getLogger(__name__)
-
 
 class ConfigWatcher:
     """Configuration watcher with hot-reload support.
@@ -72,7 +69,7 @@ class ConfigWatcher:
             path: Path to watch
         """
         try:
-            async for changes in awatch(path, debounce=self.debounce_seconds):
+            async for changes in awatch(path, debounce=int(self.debounce_seconds)):
                 logger.info(f"Configuration changes detected in {path}: {changes}")
                 await self.reload()
         except Exception as e:
@@ -184,7 +181,7 @@ class ConfigManager:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the configuration manager."""
         if not ConfigManager._initialized:
             self._config = load_config()
@@ -199,7 +196,7 @@ class ConfigManager:
     def load_from_env(self) -> Config:
         """Load configuration from environment variables."""
         self._config = load_config()
-        return self._config
+        return self._config  # type: ignore[no-any-return]
 
     def load_from_file(self, file_path: Path) -> Config:
         """Load configuration from a file.
@@ -212,7 +209,7 @@ class ConfigManager:
         """
         # For now, this is a placeholder for future JSON/YAML config support
         logger.info(f"Configuration file loading not yet implemented: {file_path}")
-        return self._config
+        return self._config  # type: ignore[no-any-return]
 
     def start_watcher(
         self,

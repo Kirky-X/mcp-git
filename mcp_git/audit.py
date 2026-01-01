@@ -6,7 +6,6 @@ including Git operations, credential access, and security events.
 """
 
 import json
-import logging
 from collections import deque
 from datetime import datetime
 from enum import Enum
@@ -14,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class AuditEventType(str, Enum):
@@ -217,12 +216,12 @@ class AuditLogger:
             Python logging level
         """
         severity_map = {
-            AuditSeverity.INFO: logging.INFO,
-            AuditSeverity.WARNING: logging.WARNING,
-            AuditSeverity.ERROR: logging.ERROR,
-            AuditSeverity.CRITICAL: logging.CRITICAL,
+            AuditSeverity.INFO: "INFO",
+            AuditSeverity.WARNING: "WARNING",
+            AuditSeverity.ERROR: "ERROR",
+            AuditSeverity.CRITICAL: "CRITICAL",
         }
-        return severity_map.get(severity, logging.INFO)
+        return severity_map.get(severity, "INFO")
 
     def query_events(
         self,

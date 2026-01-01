@@ -3,23 +3,70 @@ Main entry point for mcp-git MCP server.
 """
 
 import asyncio
-import logging
+import re
 import signal
 import sys
-from typing import Optional
+from typing import Any
 
 from dotenv import load_dotenv
 from loguru import logger
 
-from mcp_git.config import load_config
+from mcp_git.config import Config, load_config
 from mcp_git.server import McpGitServer
 
 # Load environment variables from .env file
 load_dotenv()
 
 
+# Sensitive patterns for log sanitization
+SENSITIVE_PATTERNS = [
+    # Git tokens in URLs
+    (r"(https?://)[^:]+:(.+?)@", r"\1***:***@"),
+    # Authorization headers
+    (r"(Authorization:\s*).+", r"\1***"),
+    # Git token environment variables
+    (r"(GIT_TOKEN=).+", r"\1***"),
+    # Password in URL
+    (r"password[=]\S+", "password=***"),
+    # Private key patterns
+    (r"(-{5}BEGIN\s+.*?PRIVATE\s+KEY-{5}).+", r"\1***"),
+]
+
+
+def sanitize_log_message(message: str) -> str:
+    """Sanitize sensitive information from log messages.
+
+    Args:
+        message: Original log message
+
+    Returns:
+        Sanitized log message
+    """
+    sanitized = message
+    for pattern, replacement in SENSITIVE_PATTERNS:
+        sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
+    return sanitized
+
+
+class SanitizingSink:
+    """A loguru sink wrapper that sanitizes log messages."""
+
+    def __init__(self, sink: Any) -> None:
+        self.sink = sink
+
+    def write(self, message: str) -> None:
+        """Write sanitized message to sink."""
+        sanitized = sanitize_log_message(message)
+        self.sink.write(sanitized)
+
+    def flush(self) -> None:
+        """Flush the sink."""
+        if hasattr(self.sink, "flush"):
+            self.sink.flush()
+
+
 def setup_logging(log_level: str = "INFO") -> None:
-    """Configure logging with loguru."""
+    """Configure logging with loguru and sensitive data sanitization."""
     # Remove default handler
     logger.remove()
 
@@ -31,17 +78,29 @@ def setup_logging(log_level: str = "INFO") -> None:
     )
 
     log_levels = {
-        "DEBUG": logging.DEBUG,
-        "INFO": logging.INFO,
-        "WARNING": logging.WARNING,
-        "ERROR": logging.ERROR,
+        "DEBUG": "DEBUG",
+        "INFO": "INFO",
+        "WARNING": "WARNING",
+        "ERROR": "ERROR",
     }
-    level = log_levels.get(log_level.upper(), logging.INFO)
+    level = log_levels.get(log_level.upper(), "INFO")
 
-    logger.add(sys.stderr, format=log_format, level=level, colorize=True)
+    # Create a sink that sanitizes sensitive data
+    class SanitizedStream:
+        def __init__(self, original: Any) -> None:
+            self.original = original
+
+        def write(self, message: str) -> None:
+            self.original.write(sanitize_log_message(message))
+
+        def flush(self) -> None:
+            self.original.flush()
+
+    stderr_sanitized = SanitizedStream(sys.stderr)
+    logger.add(stderr_sanitized, format=log_format, level=level, colorize=True)
 
 
-async def run_server(config: Optional = None) -> None:
+async def run_server(config: Config | None = None) -> None:
     """Run the MCP server."""
     if config is None:
         config = load_config()
@@ -57,7 +116,7 @@ async def run_server(config: Optional = None) -> None:
         # Setup signal handlers for graceful shutdown
         loop = asyncio.get_event_loop()
 
-        def signal_handler():
+        def signal_handler() -> None:
             logger.info("Received shutdown signal")
             asyncio.create_task(server.shutdown())
 
