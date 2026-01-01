@@ -50,6 +50,7 @@ dependencies = [
 
     # Utilities
     "uuid6>=2024.1.12",
+    "moka>=1.0.0",
 ]
 
 [project.optional-dependencies]

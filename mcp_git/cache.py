@@ -93,7 +93,7 @@ class RepoMetadata:
 
 class RepoMetadataCache:
     """
-    Cache for repository metadata.
+    Cache for repository metadata using moka.
 
     Provides fast access to frequently accessed repository information
     like branches, tags, and file listings.
@@ -111,10 +111,23 @@ class RepoMetadataCache:
             max_entries: Maximum number of cached repositories
             default_ttl: Default TTL in seconds (2 hours)
         """
-        self._cache: dict[str, RepoMetadata] = {}
         self._max_entries = max_entries
         self._default_ttl = default_ttl
         self._lock = asyncio.Lock()
+
+        try:
+            from moka import MokaCache
+
+            self._cache = MokaCache(
+                max_capacity=max_entries,
+                time_to_live=default_ttl,
+            )
+            self._use_moka = True
+            logger.info("Using moka for repository metadata cache")
+        except ImportError:
+            logger.warning("moka not installed, falling back to simple dict cache")
+            self._cache: dict[str, RepoMetadata] = {}
+            self._use_moka = False
 
     def _generate_cache_key(self, repo_url: str, path: Path | None = None) -> str:
         """Generate a cache key for a repository."""
@@ -142,16 +155,30 @@ class RepoMetadataCache:
         """
         cache_key = self._generate_cache_key(repo_url, path)
 
-        async with self._lock:
-            if cache_key in self._cache:
-                metadata = self._cache[cache_key]
-                if metadata.is_valid():
-                    metrics.record_cache_hit("repo_metadata")
-                    return metadata
-                else:
-                    # Expired, remove from cache
-                    del self._cache[cache_key]
-                    metrics.record_cache_miss("repo_metadata")
+        if self._use_moka:
+            metadata = self._cache.get(cache_key)
+            if metadata is not None and metadata.is_valid():
+                metrics.record_cache_hit("repo_metadata")
+                return metadata
+            elif metadata is not None:
+                # Expired, moka will handle it automatically
+                metrics.record_cache_miss("repo_metadata")
+                return None
+            else:
+                metrics.record_cache_miss("repo_metadata")
+                return None
+        else:
+            # Fallback to simple dict cache
+            async with self._lock:
+                if cache_key in self._cache:
+                    metadata = self._cache[cache_key]
+                    if metadata.is_valid():
+                        metrics.record_cache_hit("repo_metadata")
+                        return metadata
+                    else:
+                        # Expired, remove from cache
+                        del self._cache[cache_key]
+                        metrics.record_cache_miss("repo_metadata")
 
         return None
 
@@ -175,13 +202,18 @@ class RepoMetadataCache:
         if metadata.ttl_seconds == 7200:  # Default value
             metadata.ttl_seconds = self._default_ttl
 
-        async with self._lock:
-            # Check if we need to evict entries
-            if len(self._cache) >= self._max_entries:
-                self._evict_oldest()
-
-            self._cache[cache_key] = metadata
+        if self._use_moka:
+            self._cache.insert(cache_key, metadata)
             metrics.update_cache_size("repo_metadata", len(self._cache))
+        else:
+            # Fallback to simple dict cache
+            async with self._lock:
+                # Check if we need to evict entries
+                if len(self._cache) >= self._max_entries:
+                    self._evict_oldest()
+
+                self._cache[cache_key] = metadata
+                metrics.update_cache_size("repo_metadata", len(self._cache))
 
     async def invalidate(
         self,
@@ -200,11 +232,20 @@ class RepoMetadataCache:
         """
         cache_key = self._generate_cache_key(repo_url, path)
 
-        async with self._lock:
-            if cache_key in self._cache:
-                del self._cache[cache_key]
+        if self._use_moka:
+            entry = self._cache.get(cache_key)
+            if entry is not None:
+                self._cache.invalidate(cache_key)
                 metrics.update_cache_size("repo_metadata", len(self._cache))
                 return True
+            return False
+        else:
+            # Fallback to simple dict cache
+            async with self._lock:
+                if cache_key in self._cache:
+                    del self._cache[cache_key]
+                    metrics.update_cache_size("repo_metadata", len(self._cache))
+                    return True
 
         return False
 
@@ -215,11 +256,18 @@ class RepoMetadataCache:
         Returns:
             Number of entries invalidated
         """
-        async with self._lock:
+        if self._use_moka:
             count = len(self._cache)
-            self._cache.clear()
+            self._cache.invalidate_all()
             metrics.update_cache_size("repo_metadata", 0)
             return count
+        else:
+            # Fallback to simple dict cache
+            async with self._lock:
+                count = len(self._cache)
+                self._cache.clear()
+                metrics.update_cache_size("repo_metadata", 0)
+                return count
 
     async def get_or_fetch(
         self,
@@ -274,19 +322,35 @@ class RepoMetadataCache:
     @property
     def size(self) -> int:
         """Return the number of cached entries."""
-        return len(self._cache)
+        if self._use_moka:
+            return len(self._cache)
+        else:
+            return len(self._cache)
 
     @property
     def stats(self) -> dict[str, Any]:
         """Return cache statistics."""
-        valid_count = sum(1 for m in self._cache.values() if m.is_valid())
-        return {
-            "total_entries": len(self._cache),
-            "valid_entries": valid_count,
-            "expired_entries": len(self._cache) - valid_count,
-            "max_entries": self._max_entries,
-            "hit_rate": 0.0,  # Would need to track separately
-        }
+        if self._use_moka:
+            # moka doesn't provide direct access to all entries
+            # Return basic stats
+            total_entries = len(self._cache)
+            return {
+                "total_entries": total_entries,
+                "valid_entries": total_entries,  # moka handles TTL automatically
+                "expired_entries": 0,
+                "max_entries": self._max_entries,
+                "backend": "moka",
+            }
+        else:
+            # Fallback to simple dict cache
+            valid_count = sum(1 for m in self._cache.values() if m.is_valid())
+            return {
+                "total_entries": len(self._cache),
+                "valid_entries": valid_count,
+                "expired_entries": len(self._cache) - valid_count,
+                "max_entries": self._max_entries,
+                "backend": "dict",
+            }
 
 
 # Global repository metadata cache instance

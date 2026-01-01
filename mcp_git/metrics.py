@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from functools import wraps
 from typing import Any
 
+from loguru import logger
 from prometheus_client import Counter, Gauge, Histogram, Info, start_http_server
 
 # Task metrics
@@ -221,53 +222,87 @@ def track_git_operation(operation: str) -> Callable[[Callable[..., Any]], Callab
 
 
 class Cache:
-    """Simple in-memory cache with metrics."""
+    """Moka-based cache with metrics."""
 
     def __init__(self, max_size: int = 1000, ttl: int = 3600) -> None:
-        self._cache: dict[str, Any] = {}
-        self._max_size: int = max_size
-        self._ttl: int = ttl
-        self._access_times: dict[str, float] = {}
+        try:
+            from moka import MokaCache
+
+            self._cache = MokaCache(
+                max_capacity=max_size,
+                time_to_live=ttl,
+                timer=time.time,
+            )
+            self._cache_type = "generic"
+        except ImportError:
+            logger.warning("moka not installed, falling back to simple dict cache")
+            self._cache: dict[str, Any] = {}
+            self._max_size = max_size
+            self._ttl = ttl
+            self._access_times: dict[str, float] = {}
+            self._use_moka = False
+        else:
+            self._use_moka = True
 
     def get(self, key: str, cache_type: str = "generic") -> Any | None:
         """Get a value from the cache."""
-        if key in self._cache:
-            # Check TTL
-            if time.time() - self._access_times[key] < self._ttl:
-                self._access_times[key] = time.time()
+        if self._use_moka:
+            value = self._cache.get(key)
+            if value is not None:
                 metrics.record_cache_hit(cache_type)
-                return self._cache[key]
             else:
-                # Expired
-                del self._cache[key]
-                del self._access_times[key]
+                metrics.record_cache_miss(cache_type)
+            return value
+        else:
+            # Fallback to simple dict cache
+            if key in self._cache:
+                # Check TTL
+                if time.time() - self._access_times[key] < self._ttl:
+                    self._access_times[key] = time.time()
+                    metrics.record_cache_hit(cache_type)
+                    return self._cache[key]
+                else:
+                    # Expired
+                    del self._cache[key]
+                    del self._access_times[key]
 
-        metrics.record_cache_miss(cache_type)
-        return None
+            metrics.record_cache_miss(cache_type)
+            return None
 
     def set(self, key: str, value: Any, cache_type: str = "generic") -> None:
         """Set a value in the cache."""
-        # Check if cache is full
-        if len(self._cache) >= self._max_size:
-            # Remove oldest entry
-            oldest_key = min(self._access_times, key=lambda k: self._access_times[k])
-            del self._cache[oldest_key]
-            del self._access_times[oldest_key]
+        if self._use_moka:
+            self._cache.insert(key, value)
+            metrics.update_cache_size(cache_type, len(self._cache))
+        else:
+            # Fallback to simple dict cache
+            # Check if cache is full
+            if len(self._cache) >= self._max_size:
+                # Remove oldest entry
+                oldest_key = min(self._access_times, key=lambda k: self._access_times[k])
+                del self._cache[oldest_key]
+                del self._access_times[oldest_key]
 
-        self._cache[key] = value
-        self._access_times[key] = time.time()
-        metrics.update_cache_size(cache_type, len(self._cache))
+            self._cache[key] = value
+            self._access_times[key] = time.time()
+            metrics.update_cache_size(cache_type, len(self._cache))
 
     def clear(self, cache_type: str = "generic") -> None:
         """Clear the cache."""
-        self._cache.clear()
-        self._access_times.clear()
+        if self._use_moka:
+            self._cache.invalidate_all()
+        else:
+            self._cache.clear()
+            self._access_times.clear()
         metrics.update_cache_size(cache_type, 0)
 
     @property
     def size(self) -> int:
         """Return the cache size."""
-        return len(self._cache)
+        if self._use_moka:
+            return len(self._cache)
+        else:
+            return len(self._cache)
 
 
 # Pre-configured caches
