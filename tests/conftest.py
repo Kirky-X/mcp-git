@@ -7,10 +7,14 @@ import os
 import tempfile
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
+
+if TYPE_CHECKING:
+    from mcp_git.storage import SqliteStorage
 
 # Set test environment variables before imports
 os.environ["MCP_GIT_WORKSPACE_PATH"] = "/tmp/mcp-git-test/workspaces"
@@ -49,7 +53,12 @@ async def temp_database(temp_dir: Path) -> Path:
 
 @pytest_asyncio.fixture
 async def mock_storage(temp_database: Path) -> AsyncGenerator[MagicMock, None]:
-    """Create a mock storage for testing."""
+    """
+    Create a mock storage for testing.
+
+    Note: This fixture now uses a real storage instance but with mocked methods.
+    For tests that need a fully functional storage, use initialized_storage instead.
+    """
     from mcp_git.storage import SqliteStorage
     from mcp_git.storage.models import Task, TaskStatus
 
@@ -64,7 +73,7 @@ async def mock_storage(temp_database: Path) -> AsyncGenerator[MagicMock, None]:
         params={},
     )
 
-    # Mock storage methods
+    # Mock storage methods for unit tests
     storage.create_task = AsyncMock(return_value=mock_task)
     storage.get_task = AsyncMock(return_value=None)
     storage.update_task = AsyncMock(return_value=True)
@@ -76,6 +85,30 @@ async def mock_storage(temp_database: Path) -> AsyncGenerator[MagicMock, None]:
     yield storage
 
     await storage.close()
+
+
+@pytest_asyncio.fixture
+async def mock_storage_methods(initialized_storage) -> AsyncGenerator:
+    """
+    Create a storage with mocked methods for testing.
+
+    This fixture provides a real storage instance with specific methods mocked,
+    allowing tests to verify behavior while avoiding side effects.
+    """
+    from unittest.mock import AsyncMock
+
+    # Mock only specific methods
+    original_create_task = initialized_storage.create_task
+    initialized_storage.create_task = AsyncMock(wraps=original_create_task)
+
+    original_update_task = initialized_storage.update_task
+    initialized_storage.update_task = AsyncMock(wraps=original_update_task)
+
+    yield initialized_storage
+
+    # Restore original methods
+    initialized_storage.create_task = original_create_task
+    initialized_storage.update_task = original_update_task
 
 
 @pytest.fixture

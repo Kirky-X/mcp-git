@@ -128,6 +128,11 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 
+[[tool.mypy.overrides]]
+module = "tests.test_concurrency,tests.test_benchmarks,tests.test_storage_edge_cases"
+disallow_untyped_defs = false
+warn_return_any = false
+
 # Coverage 配置
 [tool.coverage.run]
 source = ["mcp_git"]

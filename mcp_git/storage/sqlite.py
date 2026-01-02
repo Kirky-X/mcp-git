@@ -108,7 +108,8 @@ class SqliteStorage:
         Returns:
             Created task with generated ID
         """
-        assert self._async_session_maker is not None
+        if self._async_session_maker is None:
+            raise RuntimeError("Storage not initialized. Call initialize() first.")
         async with self._lock:
             async with self._async_session_maker() as session:
                 task_orm = TaskORM.from_task(task)
@@ -139,9 +140,7 @@ class SqliteStorage:
         """
         async with self._lock:
             async with self._async_session_maker() as session:
-                result = await session.execute(
-                    select(TaskORM).where(TaskORM.id == str(task_id))
-                )
+                result = await session.execute(select(TaskORM).where(TaskORM.id == str(task_id)))
                 task_orm = result.scalar_one_or_none()
                 if task_orm is None:
                     return None
@@ -214,9 +213,7 @@ class SqliteStorage:
         """
         async with self._lock:
             async with self._async_session_maker() as session:
-                result = await session.execute(
-                    select(TaskORM).where(TaskORM.id == str(task_id))
-                )
+                result = await session.execute(select(TaskORM).where(TaskORM.id == str(task_id)))
                 task_orm = result.scalar_one_or_none()
 
                 if task_orm is None:
@@ -295,8 +292,9 @@ class SqliteStorage:
         async with self._lock:
             async with self._async_session_maker() as session:
                 result = await session.execute(
-                    select(WorkspaceORM)
-                    .where(WorkspaceORM.id.in_([str(wid) for wid in workspace_ids]))
+                    select(WorkspaceORM).where(
+                        WorkspaceORM.id.in_([str(wid) for wid in workspace_ids])
+                    )
                 )
                 workspace_orms = result.scalars().all()
                 return [
@@ -345,7 +343,9 @@ class SqliteStorage:
         """
         from datetime import timedelta
 
-        cutoff_timestamp = int((datetime.now(UTC) - timedelta(seconds=retention_seconds)).timestamp())
+        cutoff_timestamp = int(
+            (datetime.now(UTC) - timedelta(seconds=retention_seconds)).timestamp()
+        )
 
         async with self._lock:
             async with self._async_session_maker() as session:
@@ -527,9 +527,7 @@ class SqliteStorage:
         async with self._lock:
             async with self._async_session_maker() as session:
                 query = (
-                    select(WorkspaceORM)
-                    .order_by(WorkspaceORM.last_accessed_at.asc())
-                    .limit(count)
+                    select(WorkspaceORM).order_by(WorkspaceORM.last_accessed_at.asc()).limit(count)
                 )
                 result = await session.execute(query)
                 workspace_orms = result.scalars().all()
@@ -546,9 +544,7 @@ class SqliteStorage:
             async with self._async_session_maker() as session:
                 from sqlalchemy import func
 
-                result = await session.execute(
-                    select(func.sum(WorkspaceORM.size_bytes))
-                )
+                result = await session.execute(select(func.sum(WorkspaceORM.size_bytes)))
                 total = result.scalar()
                 return total if total else 0
 

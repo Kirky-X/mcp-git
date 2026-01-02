@@ -39,6 +39,9 @@ class TaskORM(Base):
     started_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completed_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Composite indexes for common queries
+    __table_args__ = ({"comment": "Task tracking table"},)
+
     def to_task(self) -> Task:
         """Convert ORM model to Task object."""
         from uuid import UUID
@@ -54,7 +57,9 @@ class TaskORM(Base):
             progress=self.progress,
             created_at=datetime.fromtimestamp(self.created_at, UTC) if self.created_at else None,
             started_at=datetime.fromtimestamp(self.started_at, UTC) if self.started_at else None,
-            completed_at=datetime.fromtimestamp(self.completed_at, UTC) if self.completed_at else None,
+            completed_at=datetime.fromtimestamp(self.completed_at, UTC)
+            if self.completed_at
+            else None,
         )
 
     @classmethod

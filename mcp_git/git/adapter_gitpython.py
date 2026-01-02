@@ -13,6 +13,7 @@ from typing import Any, TypeVar
 
 import git
 from git import RemoteProgress, Repo
+from loguru import logger
 
 from mcp_git.error import (
     AuthenticationError,
@@ -276,9 +277,12 @@ class GitPythonAdapter(GitAdapter):
                                 repo.create_head(default_branch)
                             # Checkout the default branch
                             repo.heads[default_branch].checkout()
-                    except Exception:
-                        # Empty repository, skip branch setup
-                        pass
+                    except (git.InvalidGitRepositoryError, ValueError, IndexError):
+                        # Empty repository or invalid HEAD, skip branch setup
+                        logger.debug("Empty repository detected, skipping branch setup")
+                    except Exception as e:
+                        # Log unexpected errors but continue
+                        logger.warning(f"Unexpected error during branch setup: {e}")
 
         except Exception as e:
             raise GitOperationError(

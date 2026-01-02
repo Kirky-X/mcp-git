@@ -302,11 +302,11 @@ def sanitize_remote_url(url: str) -> str:
     # Only allow secure protocols and standard Git protocols
     ALLOWED_PROTOCOLS = [
         "https://",  # HTTPS (recommended)
-        "http://",   # HTTP (less secure but common)
-        "git://",    # Git protocol
-        "ssh://",    # SSH protocol
-        "git@",      # SSH shorthand (git@github.com:user/repo.git)
-        "/",         # Local file path
+        "http://",  # HTTP (less secure but common)
+        "git://",  # Git protocol
+        "ssh://",  # SSH protocol
+        "git@",  # SSH shorthand (git@github.com:user/repo.git)
+        "/",  # Local file path
     ]
 
     url_lower = url.lower()
@@ -330,19 +330,15 @@ def sanitize_remote_url(url: str) -> str:
 
             if hostname:
                 # Block localhost variants
-                localhost_patterns = ["localhost", "127.0.0.1", "::1", "0.0.0.0"]
+                localhost_patterns = ["localhost", "127.0.0.1", "::1", "0.0.0.0"]  # nosec: B104 - SSRF protection, not binding
                 if hostname.lower() in localhost_patterns:
-                    raise ValueError(
-                        f"Localhost URLs are not allowed for security reasons: {url}"
-                    )
+                    raise ValueError(f"Localhost URLs are not allowed for security reasons: {url}")
 
                 # Block private IP ranges
                 try:
                     ip = ipaddress.ip_address(hostname)
                     if ip.is_private or ip.is_loopback or ip.is_link_local:
-                        raise ValueError(
-                            f"Private IP addresses are not allowed: {hostname}"
-                        )
+                        raise ValueError(f"Private IP addresses are not allowed: {hostname}")
                 except ValueError:
                     # Not an IP address, might be a hostname
                     pass
