@@ -107,6 +107,7 @@ IFLOW.md
 
 # Project Specific
 /tmp/mcp-git/
+mcp_git.egg-info/
 
 # Documentation (local only)
 docs/git.md
