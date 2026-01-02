@@ -1,448 +1,642 @@
-# mcp-git
+<div align="center">
 
-A Python-based Git operations MCP (Model Context Protocol) server that provides a comprehensive interface for Git operations through the MCP protocol.
+<h1><a href="#" id="-mcp-git">🚀 mcp-git</a></h1>
 
-## Overview
+<p>
+  <!-- 版本 -->
+  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version">
+  <!-- 许可证 -->
+  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
+  <!-- Python 版本 -->
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python">
+  <!-- 状态 -->
+  <a href="#"><img src="https://img.shields.io/badge/status-Alpha-orange.svg" alt="Status"></a>
+</p>
 
-mcp-git is an MCP server implementation that enables AI assistants and other MCP clients to perform Git operations through a well-defined protocol. It provides a complete set of Git operations including repository management, branching, committing, pushing, pulling, merging, and more.
+<p align="center">
+  <strong>Git operations MCP server for AI Agents</strong>
+</p>
 
-### Key Features
+<p align="center">
+  <a href="#-功能特性">功能特性</a> •
+  <a href="#-快速开始">快速开始</a> •
+  <a href="#-工具列表">工具列表</a> •
+  <a href="#-配置说明">配置说明</a> •
+  <a href="#-测试">测试</a> •
+  <a href="#-贡献">贡献</a>
+</p>
 
-- **Complete Git Operations**: Support for all common Git operations including clone, commit, push, pull, branch, merge, rebase, stash, tag, and more
-- **Workspace Management**: Automatic workspace allocation and cleanup with LRU-based eviction
-- **Task Queue**: Priority-based task queue with configurable concurrency limits
-- **Worker Pool**: Automatic worker scaling for parallel task execution
-- **SQLite Persistence**: Tasks and workspaces are persisted to SQLite for durability
-- **Secure Credential Handling**: Support for tokens, SSH keys, and username/password authentication
-- **MCP Protocol**: Full MCP protocol implementation for seamless integration with MCP clients
-
-## Architecture
-
-The project follows a 5-layer architecture:
-
-```
-┌─────────────────┐     ┌─────────────────┐
-│  MCP Protocol   │────▶│ Business Logic  │
-│     Layer       │     │     Layer       │
-└─────────────────┘     └─────────────────┘
-                               │
-                               ▼
-┌─────────────────┐     ┌─────────────────┐
-│    Storage      │◀────│   Execution     │
-│     Layer       │     │     Layer       │
-└─────────────────┘     └─────────────────┘
-```
-
-### Layers
-
-1. **MCP Protocol Layer** (`mcp_git/server/`): MCP server, tools, and handlers
-2. **Business Logic Layer** (`mcp_git/service/`): Facade, TaskManager, WorkspaceManager, CredentialManager
-3. **Execution Layer** (`mcp_git/execution/`): TaskQueue and WorkerPool
-4. **Git Operations Layer** (`mcp_git/git/`): Git adapter interface and GitPython implementation
-5. **Storage Layer** (`mcp_git/storage/`): SQLite storage and data models
-
-## Installation
-
-### Prerequisites
-
-- Python 3.10+
-- Git
-- **uv** (recommended) or pip
+</div>
 
 ---
 
-## Quick Start with uv
+## 📋 目录
 
-[uv](https://docs.astral.sh/uv/) is a fast Python package installer and resolver, written in Rust.
+<details open>
+<summary>点击展开</summary>
 
-### 1. Install uv
+- [✨ 功能特性](#-功能特性)
+- [🎯 应用场景](#-应用场景)
+- [🚀 快速开始](#-快速开始)
+  - [安装](#安装)
+  - [配置](#配置)
+  - [运行](#运行)
+- [🛠️ 工具列表](#️-工具列表)
+  - [工作空间管理](#工作空间管理)
+  - [仓库操作](#仓库操作)
+  - [提交操作](#提交操作)
+  - [分支操作](#分支操作)
+  - [历史记录](#历史记录)
+  - [远程操作](#远程操作)
+  - [标签操作](#标签操作)
+  - [暂存操作](#暂存操作)
+  - [Git LFS](#git-lfs)
+- [📚 高级功能](#-高级功能)
+- [⚙️ 配置说明](#️-配置说明)
+- [🧪 测试](#-测试)
+- [🔒 安全特性](#-安全特性)
+- [📊 性能与监控](#-性能与监控)
+- [🤝 贡献](#-贡献)
+- [📄 许可证](#-许可证)
+- [🙏 致谢](#-致谢)
 
-**macOS / Linux:**
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+</details>
 
-**Windows (PowerShell):**
-```powershell
-irm https://astral.sh/uv/install.ps1 | iex
-```
+---
 
-**Or using pip:**
-```bash
-pip install uv
-```
+## ✨ 功能特性
 
-### 2. Create Virtual Environment & Install
+<table>
+<tr>
+<td width="50%">
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/mcp-git.git
-cd mcp-git
+### 🎯 核心功能
 
-# Create virtual environment and install dependencies
-uv venv
-uv pip install -e .
+- ✅ **工作空间管理** - 安全隔离的 Git 操作工作空间
+- ✅ **完整 Git 操作** - 支持所有常用 Git 命令
+- ✅ **MCP 协议集成** - 符合 Model Context Protocol 规范
+- ✅ **AI Agent 优化** -专为 AI Agents 设计的 Git 操作接口
 
-# Install development dependencies
-uv pip install -e ".[dev]"
-```
+</td>
+<td width="50%">
 
-### 3. Run the Server
+### ⚡ 高级特性
 
-```bash
-# Activate virtual environment
-source .venv/bin/activate  # Linux/macOS
-# or
-.venv\Scripts\activate     # Windows
+- 🚀 **高性能异步** - 基于 anyio 的异步处理架构
+- 🔐 **安全防护** - 路径验证、凭证管理、日志脱敏
+- 📦 **速率限制** - 防止资源滥用
+- 💾 **智能缓存** - 提升重复操作性能
+- 📊 **完整监控** - 指标收集和追踪
 
-# Run the MCP server
-mcp-git
+</td>
+</tr>
+</table>
+
+<div align="center">
+
+### 🏗️ 系统架构
+
+</div>
+
+```mermaid
+graph LR
+    A[AI Agent] --> B[MCP Client]
+    B --> C[mcp-git Server]
+    C --> D[Workspace Manager]
+    C --> E[Git Adapter]
+    C --> F[Cache Layer]
+    D --> G[Git Repositories]
+    E --> G
+    F --> G
 ```
 
 ---
 
-## Alternative Installation Methods
+## 🎯 应用场景
 
-### Install from Source (pip)
+<details>
+<summary><b>🤖 AI Agent 代码仓库管理</b></summary>
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/mcp-git.git
-cd mcp-git
+<br>
 
-# Install dependencies
-pip install -e .
-```
+AI Agent 可以通过 mcp-git 安全地操作代码仓库，实现：
 
-### Install from PyPI
+- 自动代码审查和提交
+- 分支管理和版本控制
+- 合并请求自动化
+- 代码历史分析
 
-```bash
-pip install mcp-git
-```
+</details>
 
-## Configuration
+<details>
+<summary><b>🔄 CI/CD 自动化</b></summary>
 
-### Environment Variables
+<br>
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MCP_GIT_WORKSPACE_PATH` | Workspace root directory | `/tmp/mcp-git/workspaces` |
-| `MCP_GIT_DATABASE_PATH` | SQLite database path | `/tmp/mcp-git/database/mcp-git.db` |
-| `MCP_GIT_SERVER_PORT` | Server port | `3001` |
-| `MCP_GIT_SERVER_TRANSPORT` | Transport type (stdio, sse) | `stdio` |
-| `MCP_GIT_MAX_CONCURRENT_TASKS` | Maximum concurrent tasks | `10` |
-| `MCP_GIT_TASK_TIMEOUT` | Task timeout in seconds | `300` |
-| `MCP_GIT_GIT_TOKEN` | Git authentication token | - |
-| `MCP_GIT_GITHUB_TOKEN` | GitHub authentication token | - |
-| `MCP_GIT_SSH_KEY_PATH` | Path to SSH private key | - |
+集成到自动化流程中：
 
-### Configuration File
+- 自动构建和测试触发
+- 发布版本管理
+- 代码同步和部署
 
-Create a `config.yaml` file:
+</details>
 
-```yaml
-workspace:
-  path: "/tmp/mcp-git/workspaces"
-  max_size_bytes: 10737418240  # 10GB
-  retention_seconds: 3600
+<details>
+<summary><b>📊 代码分析工具</b></summary>
 
-database:
-  path: "/tmp/mcp-git/database/mcp-git.db"
-  max_size_bytes: 104857600  # 100MB
-  task_retention_seconds: 3600
+<br>
 
-server:
-  host: "127.0.0.1"
-  port: 3001
-  transport: "stdio"
+用于代码分析和审计：
 
-execution:
-  max_concurrent_tasks: 10
-  task_timeout: 300
-  worker_count: 4
-```
+- 代码历史追溯
+- 贡献者分析
+- 代码变更追踪
+- 质量指标收集
 
-## Usage
+</details>
 
-### Running the Server
+---
 
-```bash
-# Using the CLI
-mcp-git
+## 🚀 快速开始
 
-# Or with a custom config
-mcp-git --config /path/to/config.yaml
+### 安装
 
-# Using Python directly
-python -m mcp_git.main
-```
+从源码安装或使用 pip 安装即可。
 
-### Using with Claude Code
+### 配置
 
-Add to your `CLAUDE.md` or MCP configuration:
+支持通过环境变量或配置文件进行服务器配置。
+
+### Claude Desktop 配置
+
+在 Claude Desktop 中配置 mcp-git 服务器，需在配置文件中添加以下内容：
 
 ```json
 {
   "mcpServers": {
-    "git": {
-      "command": "mcp-git",
-      "env": {
-        "MCP_GIT_GITHUB_TOKEN": "your-token-here"
-      }
+    "mcp-git": {
+      "command": "uv",
+      "args": [
+        "--with",
+        "git+https://github.com/Kirky-X/mcp-git.git",
+        "run",
+        "mcp-git"
+      ]
     }
   }
 }
 ```
 
-### Available Tools
+### 运行
 
-#### Workspace Management
+支持多种运行方式，包括默认启动、指定配置和开发模式。
 
-- `git_allocate_workspace`: Allocate a new workspace for Git operations
-- `git_get_workspace`: Get information about a workspace
-- `git_release_workspace`: Release a workspace and clean up resources
-- `git_list_workspaces`: List all allocated workspaces
+---
 
-#### Repository Operations
+## 🛠️ 工具列表
 
-- `git_clone`: Clone a Git repository into a workspace
-- `git_init`: Initialize a new Git repository
-- `git_status`: Get repository status
+### 工作空间管理
 
-#### Commit Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_allocate_workspace` | 分配新的工作空间 |
+| `git_get_workspace` | 获取工作空间信息 |
+| `git_release_workspace` | 释放工作空间 |
+| `git_list_workspaces` | 列出所有工作空间 |
+| `git_disk_space` | 检查磁盘空间 |
 
-- `git_stage`: Stage files for commit
-- `git_commit`: Create a new commit
+### 仓库操作
 
-#### Remote Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_clone` | 克隆仓库（支持浅克隆和分支选择） |
+| `git_init` | 初始化新仓库 |
+| `git_status` | 查看工作目录状态 |
 
-- `git_push`: Push commits to remote
-- `git_pull`: Pull changes from remote
-- `git_fetch`: Fetch from remote
+### 子模块操作
 
-#### Branch Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_submodule_add` | 添加子模块 |
+| `git_submodule_update` | 更新子模块 |
+| `git_submodule_deinit` | 移除子模块 |
+| `git_submodule_list` | 列出所有子模块 |
 
-- `git_checkout`: Checkout a branch or commit
-- `git_list_branches`: List branches
-- `git_create_branch`: Create a new branch
-- `git_delete_branch`: Delete a branch
+### 提交操作
 
-#### Merge and Rebase
+| 工具名称 | 描述 |
+|---------|------|
+| `git_stage` | 暂存文件（支持 glob 模式） |
+| `git_commit` | 创建提交 |
+| `git_push` | 推送到远程仓库 |
+| `git_pull` | 拉取远程更改 |
+| `git_fetch` | 获取远程更改 |
 
-- `git_merge`: Merge a branch into current branch
-- `git_rebase`: Rebase current branch
+### 分支操作
 
-#### History Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_checkout` | 切换分支 |
+| `git_list_branches` | 列出分支 |
+| `git_create_branch` | 创建分支 |
+| `git_delete_branch` | 删除分支 |
+| `git_merge` | 合并分支 |
+| `git_rebase` | 变基操作 |
 
-- `git_log`: View commit history
-- `git_show`: Show a specific commit
-- `git_diff`: Show differences
-- `git_blame`: Show blame information
+### 历史记录
 
-#### Stash Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_log` | 查看提交历史 |
+| `git_show` | 查看特定提交 |
+| `git_diff` | 查看差异 |
+| `git_blame` | 查看文件修改历史 |
 
-- `git_stash`: Stash changes
-- `git_list_stash`: List stash entries
+### 暂存操作
 
-#### Tag Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_stash` | 暂存更改 |
+| `git_list_stash` | 列出暂存列表 |
 
-- `git_list_tags`: List tags
-- `git_create_tag`: Create a tag
-- `git_delete_tag`: Delete a tag
+### 标签操作
 
-#### Remote Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_list_tags` | 列出标签 |
+| `git_create_tag` | 创建标签 |
+| `git_delete_tag` | 删除标签 |
 
-- `git_list_remotes`: List remotes
-- `git_add_remote`: Add a remote
-- `git_remove_remote`: Remove a remote
+### 远程操作
 
-#### Git LFS Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_list_remotes` | 列出远程仓库 |
+| `git_add_remote` | 添加远程仓库 |
+| `git_remove_remote` | 移除远程仓库 |
 
-- `git_lfs_init`: Initialize Git LFS in a repository
-- `git_lfs_track`: Track files with Git LFS
-- `git_lfs_untrack`: Stop tracking files with Git LFS
-- `git_lfs_status`: Show Git LFS status and tracked files
-- `git_lfs_pull`: Download LFS files from remote
-- `git_lfs_push`: Push LFS objects to remote
-- `git_lfs_fetch`: Fetch LFS objects from remote
-- `git_lfs_install`: Install Git LFS hooks
+### 稀疏检出
 
-#### Submodule Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_sparse_checkout` | 稀疏检出操作 |
 
-- `git_submodule_add`: Add a submodule to the repository
-- `git_submodule_update`: Update submodules to their latest state
-- `git_submodule_deinit`: Deinitialize a submodule
-- `git_submodule_list`: List all submodules
+### Git LFS
 
-#### Task Operations
+| 工具名称 | 描述 |
+|---------|------|
+| `git_lfs_init` | 初始化 Git LFS |
+| `git_lfs_track` | 跟踪大文件 |
+| `git_lfs_untrack` | 取消跟踪大文件 |
+| `git_lfs_status` | 查看 LFS 状态 |
+| `git_lfs_pull` | 拉取 LFS 文件 |
+| `git_lfs_push` | 推送 LFS 文件 |
+| `git_lfs_fetch` | 获取 LFS 文件 |
+| `git_lfs_install` | 安装 LFS 钩子 |
 
-- `git_get_task`: Get task information
-- `git_list_tasks`: List tasks
-- `git_cancel_task`: Cancel a task
+### 任务管理
 
-### Example Usage
+| 工具名称 | 描述 |
+|---------|------|
+| `git_get_task` | 获取任务信息 |
+| `git_list_tasks` | 列出任务 |
+| `git_cancel_task` | 取消任务 |
 
-```python
-# Allocate a workspace
-workspace = await server.allocate_workspace()
-print(f"Workspace ID: {workspace['workspace_id']}")
-print(f"Path: {workspace['path']}")
+---
 
-# Clone a repository
-result = await server.clone(
-    url="https://github.com/example/repo.git",
-    workspace_id=workspace_id,
-    branch="main",
-    depth=1,
-)
-print(f"Cloned: {result['oid'][:8]} - {result['message']}")
+## 📚 高级功能
 
-# Stage and commit
-await server.stage_files(workspace_id, files=["file.txt"])
-commit_oid = await server.create_commit(
-    workspace_id,
-    message="Update file.txt",
-    author_name="Your Name",
-    author_email="you@example.com",
-)
+<div align="center">
 
-# Push to remote
-await server.push(workspace_id, remote="origin", branch="main")
+### 🔧 高级特性概览
 
-# Release workspace when done
-await server.release_workspace(workspace_id)
-```
+</div>
 
-## Development
+<table>
+<tr>
+<td align="center" width="25%">
+<img src="https://img.icons8.com/fluency/96/000000/security.png" width="64" height="64"><br>
+<b>安全防护</b><br>
+路径验证、凭证脱敏、访问控制
+</td>
+<td align="center" width="25%">
+<img src="https://img.icons8.com/fluency/96/000000/speed.png" width="64" height="64"><br>
+<b>性能优化</b><br>
+异步处理、连接管理、查询优化
+</td>
+<td align="center" width="25%">
+<img src="https://img.icons8.com/fluency/96/000000/console.png" width="64" height="64"><br>
+<b>监控追踪</b><br>
+指标收集、日志追踪、审计日志
+</td>
+<td align="center" width="25%">
+<img src="https://img.icons8.com/fluency/96/000000/reload.png" width="64" height="64"><br>
+<b>错误处理</b><br>
+错误分类、建议生成、日志脱敏
+</td>
+</tr>
+</table>
 
-### Setting Up Development Environment
+### 错误处理
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/mcp-git.git
-cd mcp-git
+mcp-git 提供智能错误处理和分类，支持仓库未找到、认证失败、合并冲突等异常情况。
 
-# Create virtual environment and install with dev dependencies
-uv venv
-uv pip install -e ".[dev]"
-```
+### 日志系统
 
-### Running Tests
+使用 loguru 实现高性能日志，支持结构化日志记录。
 
-```bash
-# Run all tests with uv
-uv run pytest
+### 指标监控
 
-# Run with coverage
-uv run pytest --cov=mcp_git
+mcp-git 内置指标收集系统，支持操作统计、缓存命中率和错误率监控。
 
-# Run specific test file
-uv run pytest tests/test_storage.py -v
+---
 
-# Run specific test
-uv run pytest tests/test_workspace_manager.py::TestWorkspaceManager::test_allocate_workspace -v
-```
+## ⚙️ 配置说明
 
-### Code Formatting and Linting
+### 配置文件示例
 
-```bash
-# Format code with ruff
-uv run ruff format .
+提供完整的 YAML 配置示例，涵盖服务器、Git、缓存、安全等各项设置。
 
-# Run linter
-uv run ruff check .
+### 环境变量
 
-# Type checking with mypy
-uv run mypy mcp_git/
-```
+| 变量名 | 描述 | 默认值 |
+|--------|------|--------|
+| `MCP_GIT_HOST` | 服务器绑定地址 | `127.0.0.1` |
+| `MCP_GIT_PORT` | 服务器端口 | `8080` |
+| `LOG_LEVEL` | 日志级别 | `INFO` |
+| `GIT_TOKEN` | Git 访问令牌 | - |
+| `GIT_SSH_KEY` | SSH 私钥路径 | - |
+| `RATE_LIMIT_REQUESTS` | 速率限制最大请求数 | `100` |
+| `RATE_LIMIT_WINDOW` | 速率限制时间窗口（秒） | `60` |
+| `CACHE_MAX_SIZE` | 缓存最大条目数 | `1000` |
+| `CACHE_TTL` | 缓存过期时间（秒） | `3600` |
+| `MAX_WORKSPACE_SIZE` | 工作空间最大大小（字节） | `10737418240` |
 
-### Pre-commit Hooks
+---
 
-```bash
-# Install pre-commit hooks
-uv run pre-commit install
+## 🧪 测试
 
-# Run pre-commit manually
-uv run pre-commit run --all-files
-```
+提供完整的测试套件，包括单元测试、集成测试、性能测试和安全测试。
 
-### Project Structure
+<details>
+<summary><b>📊 测试统计</b></summary>
 
-```
-mcp-git/
-├── mcp_git/
-│   ├── __init__.py
-│   ├── main.py                 # Entry point
-│   ├── config.py               # Configuration management
-│   ├── error.py                # Error definitions
-│   ├── git/
-│   │   ├── __init__.py
-│   │   ├── adapter.py          # Git adapter interface
-│   │   └── adapter_gitpython.py # GitPython implementation
-│   ├── storage/
-│   │   ├── __init__.py
-│   │   ├── models.py           # Data models
-│   │   └── sqlite.py           # SQLite storage
-│   ├── service/
-│   │   ├── __init__.py
-│   │   ├── facade.py           # Git service facade
-│   │   ├── task_manager.py     # Task management
-│   │   ├── workspace_manager.py # Workspace management
-│   │   └── credential_manager.py # Credential handling
-│   ├── execution/
-│   │   ├── __init__.py
-│   │   ├── task_queue.py       # Task queue
-│   │   └── worker_pool.py      # Worker pool
-│   └── server/
-│       ├── __init__.py
-│       ├── server.py           # MCP server
-│       ├── tools.py            # Tool definitions
-│       └── handlers.py         # Tool handlers
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py            # Pytest fixtures
-│   ├── test_config.py
-│   ├── test_models.py
-│   ├── test_storage.py
-│   ├── test_workspace_manager.py
-│   ├── test_task_manager.py
-│   ├── test_git_adapter.py
-│   ├── test_task_queue.py
-│   └── test_worker_pool.py
-├── pyproject.toml
-└── README.md
-```
+<br>
 
-### Adding New Git Operations
+| 测试类型 | 覆盖模块 | 状态 |
+|---------|---------|------|
+| 单元测试 | 核心功能、工具处理 | ✅ 完整 |
+| 集成测试 | Git 操作完整流程 | ✅ 完整 |
+| 性能测试 | 异步处理、缓存效率 | ✅ 完整 |
+| 安全测试 | 路径验证、凭证安全 | ✅ 完整 |
+| 并发测试 | 多任务处理 | ✅ 完整 |
+| 容错测试 | 错误恢复、重试机制 | ✅ 完整 |
 
-1. Add the operation to `mcp_git/git/adapter.py` as an abstract method
-2. Implement in `mcp_git/git/adapter_gitpython.py`
-3. Add to facade in `mcp_git/service/facade.py`
-4. Add tool definition in `mcp_git/server/tools.py`
-5. Add handler in `mcp_git/server/handlers.py`
-6. Add tests
+</details>
 
-## Security Considerations
+---
 
-- Credentials are stored securely using `pydantic.SecretStr`
-- Workspace paths are validated to prevent path traversal attacks
-- Git operations run in isolated workspaces
-- Task timeouts prevent hanging operations
+## 🔒 安全特性
 
-## License
+<div align="center">
 
-MIT License - see LICENSE file for details.
+### 🛡️ 安全防护体系
 
-## Contributing
+</div>
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests
-5. Submit a pull request
+<table>
+<tr>
+<td align="center" width="20%">
+<img src="https://img.icons8.com/fluency/96/000000/lock.png" width="64" height="64"><br>
+<b>路径安全</b><br>
+路径遍历防护、访问控制
+</td>
+<td align="center" width="20%">
+<img src="https://img.icons8.com/fluency/96/000000/key.png" width="64" height="64"><br>
+<b>凭证管理</b><br>
+安全存储、自动脱敏
+</td>
+<td align="center" width="20%">
+<img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="64" height="64"><br>
+<b>日志脱敏</b><br>
+敏感信息自动清除
+</td>
+<td align="center" width="20%">
+<img src="https://img.icons8.com/fluency/96/000000/shield.png" width="64" height="64"><br>
+<b>输入验证</b><br>
+参数校验、类型检查
+</td>
+<td align="center" width="20%">
+<img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="64" height="64"><br>
+<b>审计日志</b><br>
+完整操作记录
+</td>
+</tr>
+</table>
 
-## Support
+### 安全措施
 
-- Report issues on GitHub
-- Check the documentation
-- Review existing issues
+- ✅ **路径遍历防护** - 防止非法路径访问
+- ✅ **凭证自动脱敏** - 敏感信息不记录日志
+- ✅ **Git Token 安全** - 环境变量和配置文件加密
+- ✅ **工作空间隔离** - 每个工作空间独立存储
+- ✅ **磁盘空间限制** - 防止磁盘耗尽攻击
+- ✅ **速率限制** - 防止拒绝服务攻击
+
+### 报告安全漏洞
+
+请通过以下方式报告安全漏洞：
+- GitHub Issues: [Security Advisory](https://github.com/Kirky-X/mcp-git/security/advisories)
+- 邮箱: security@example.com
+
+---
+
+## 📊 性能与监控
+
+### 指标收集
+
+mcp-git 内置完整的指标收集系统，支持操作统计、缓存命中率和错误率监控。
+
+### 日志系统
+
+使用 loguru 实现高性能日志，支持结构化日志记录和自动脱敏。
+
+### 追踪集成
+
+支持 OpenTelemetry 分布式追踪，实现完整的请求链路监控。
+
+---
+
+## 🤝 贡献
+
+<div align="center">
+
+### 💖 欢迎贡献！
+
+</div>
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+### 🐛 报告 Bug
+
+发现问题？<br>
+[创建 Issue](../../issues/new?template=bug_report.md)
+
+</td>
+<td width="33%" align="center">
+
+### 💡 功能建议
+
+有想法？<br>
+[提交 Feature Request](../../issues/new?template=feature_request.md)
+
+</td>
+<td width="33%" align="center">
+
+### 🔧 贡献代码
+
+想贡献代码？<br>
+[提交 Pull Request](../../pulls)
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>📝 贡献指南</b></summary>
+
+<br>
+
+### 开发环境设置
+
+1. **Fork** 本仓库
+2. **克隆** 你的 Fork 仓库
+3. **创建** 开发分支
+4. **安装** 开发依赖
+5. **运行** 测试
+6. **提交** 你的更改
+7. **推送** 到分支
+8. **创建** Pull Request
+
+### 代码规范
+
+遵循 PEP 8 代码规范，使用 type hints，编写完整的 docstring，保持测试覆盖率。
+
+</details>
+
+---
+
+## 📄 许可证
+
+<div align="center">
+
+本项目采用 MIT 许可证。
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+你可以自由使用、修改和分发本项目，但需要保留版权声明。
+
+</div>
+
+---
+
+## 🙏 致谢
+
+<div align="center">
+
+### 依赖项目
+
+</div>
+
+<table>
+<tr>
+<td align="center" width="25%">
+<a href="https://github.com/anthropics/mcp">
+<img src="https://img.icons8.com/fluency/96/000000/api.png" width="64" height="64"><br>
+<b>MCP Protocol</b>
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://gitpython.readthedocs.io">
+<img src="https://img.icons8.com/fluency/96/000000/git.png" width="64" height="64"><br>
+<b>GitPython</b>
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://sqlalchemy.org">
+<img src="https://img.icons8.com/fluency/96/000000/database.png" width="64" height="64"><br>
+<b>SQLAlchemy</b>
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://pydantic.dev">
+<img src="https://img.icons8.com/fluency/96/000000/settings.png" width="64" height="64"><br>
+<b>Pydantic</b>
+</a>
+</td>
+</tr>
+</table>
+
+### 特别感谢
+
+- 🌟 **GitPython 团队** - 提供优秀的 Python Git 库
+- 📦 **MCP 社区** - Model Context Protocol 规范
+- 🐍 **Python 社区** - 优秀的开发工具生态
+- 💻 **开源贡献者** - 所有的贡献者和用户
+
+---
+
+## 📞 联系方式
+
+<div align="center">
+
+<table>
+<tr>
+<td align="center" width="33%">
+<a href="../../issues">
+<img src="https://img.icons8.com/fluency/96/000000/bug.png" width="48" height="48"><br>
+<b>Issues</b>
+</a><br>
+报告问题
+</td>
+<td align="center" width="33%">
+<a href="../../discussions">
+<img src="https://img.icons8.com/fluency/96/000000/chat.png" width="48" height="48"><br>
+<b>Discussions</b>
+</a><br>
+讨论交流
+</td>
+<td align="center" width="33%">
+<a href="https://github.com/Kirky-X/mcp-git">
+<img src="https://img.icons8.com/fluency/96/000000/github.png" width="48" height="48"><br>
+<b>GitHub</b>
+</a><br>
+项目主页
+</td>
+</tr>
+</table>
+
+### 关注更新
+
+[![GitHub Stars](https://img.shields.io/github/stars/Kirky-X/mcp-git?style=social)](https://github.com/Kirky-X/mcp-git)
+[![GitHub Forks](https://img.shields.io/github/forks/Kirky-X/mcp-git?style=social)](https://github.com/Kirky-X/mcp-git)
+
+</div>
+
+---
+
+<div align="center">
+
+### ⭐ 如果这个项目对你有帮助，请给它一个星标！
+
+**Built with ❤️ by Kirky.X**
+
+[⬆ 返回顶部](#-mcp-git)
+
+---
+
+<sub>© 2024 mcp-git. All rights reserved.</sub>
+
+</div>
