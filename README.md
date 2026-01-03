@@ -177,9 +177,9 @@ AI Agent 可以通过 mcp-git 安全地操作代码仓库，实现：
     "mcp-git": {
       "command": "uv",
       "args": [
+        "run",
         "--with",
         "git+https://github.com/Kirky-X/mcp-git.git",
-        "run",
         "mcp-git"
       ]
     }
