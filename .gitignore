@@ -80,16 +80,8 @@ Thumbs.db
 temp/
 *.cache
 
-# Test Data Temporary Files
-test-data/data/repos/*/.git/
-test-data/data/repos/*/hooks/
-test-data/data/repos/*/objects/
-test-data/data/repos/*/refs/
-test-data/data/repos/*/info/
-test-data/data/repos/*/logs/
-test-data/data/repos/*/config
-test-data/data/repos/*/description
-test-data/data/repos/*/HEAD
+# Test Data
+test-data/
 
 # Template Build Artifacts
 templates/python-ci/.ruff_cache/
@@ -116,3 +108,12 @@ docs/prd.md
 docs/tdd.md
 docs/uat.md
 docs/test.md
+
+# Test Data
+test-data/
+
+# uv
+uv.lock
+
+# Claude
+.claude/
