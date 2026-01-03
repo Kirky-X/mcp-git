@@ -20,6 +20,7 @@ from mcp_git.error import (
     RepositoryNotFoundError,
 )
 from mcp_git.error_sanitizer import error_sanitizer
+from mcp_git.utils import sanitize_remote_url
 
 # Tool handler registry for O(1) lookup
 TOOL_HANDLER_REGISTRY: dict[str, Callable[[Any, dict[str, Any]], list[TextContent]]] = {}
@@ -159,8 +160,16 @@ async def handle_call_tool(server: Any, name: str, arguments: dict[str, Any]) ->
         # Repository operations
         elif name == "git_clone":
             workspace_id = UUID(arguments["workspace_id"])
+
+            # Sanitize and validate URL to prevent SSRF attacks
+            try:
+                sanitized_url = sanitize_remote_url(arguments["url"])
+            except ValueError as e:
+                logger.warning(f"Invalid URL provided for git_clone: {arguments['url']}")
+                return [TextContent(type="text", text=f"Invalid URL: {e}")]
+
             result = await server.clone(
-                url=arguments["url"],
+                url=sanitized_url,
                 workspace_id=workspace_id,
                 branch=arguments.get("branch"),
                 depth=arguments.get("depth"),

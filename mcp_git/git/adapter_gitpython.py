@@ -29,7 +29,7 @@ from mcp_git.storage.models import (
     DiffInfo,
     FileStatus,
 )
-from mcp_git.utils import sanitize_path
+from mcp_git.utils import sanitize_branch_name, sanitize_path
 
 from .adapter import (
     BlameOptions,
@@ -714,14 +714,17 @@ class GitPythonAdapter(GitAdapter):
         self, path: Path, name: str, revision: str | None = None, force: bool = False
     ) -> None:
         """Create a new branch."""
+        # Sanitize branch name to prevent command injection
+        sanitized_name = sanitize_branch_name(name)
+
         repo = await self._get_repo(path)
 
         try:
             if revision:
                 commit = repo.commit(revision)
-                repo.create_head(name, commit=commit, force=force)
+                repo.create_head(sanitized_name, commit=commit, force=force)
             else:
-                repo.create_head(name, force=force)
+                repo.create_head(sanitized_name, force=force)
 
         except git.GitCommandError as e:
             raise GitOperationError(

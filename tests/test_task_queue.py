@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
+from mcp_git.execution.task_queue import TaskPriority
+
 
 @pytest_asyncio.fixture
 async def task_queue():
@@ -124,7 +126,7 @@ class TestTaskQueue:
     @pytest.mark.asyncio
     async def test_get_metrics(self, task_queue):
         """Test getting queue metrics."""
-        metrics = task_queue.get_metrics()
+        metrics = await task_queue.get_metrics()
 
         assert "submitted" in metrics
         assert "completed" in metrics
@@ -270,26 +272,20 @@ class TestTaskQueueConcurrency:
         queue = TaskQueue(max_size=100, max_concurrent=2, max_retries=1)
         await queue.start()
 
-        # Track active tasks
-        active_count = 0
         max_active = 0
-        lock = asyncio.Lock()
 
         async def long_task():
-            nonlocal active_count, max_active
-            async with lock:
-                active_count += 1
-                max_active = max(max_active, active_count)
             await asyncio.sleep(0.5)
-            async with lock:
-                active_count -= 1
 
         # Submit more tasks than concurrent limit
         for _i in range(5):
             await queue.submit(coroutine=long_task)
 
-        # Wait a bit
-        await asyncio.sleep(0.3)
+        # Monitor active count for a short period
+        for _i in range(10):
+            metrics = await queue.get_metrics()
+            max_active = max(max_active, metrics["active_count"])
+            await asyncio.sleep(0.05)
 
         # Max active should not exceed limit
         assert max_active <= 2
@@ -303,18 +299,21 @@ class TestTaskQueueConcurrency:
         """Test that queue rejects when full."""
         from mcp_git.execution.task_queue import TaskQueue
 
+        # Create queue with max_size=5
         queue = TaskQueue(max_size=5, max_concurrent=10, max_retries=1)
-        await queue.start()
-
+        
+        # Don't start the queue, so tasks will accumulate
         async def dummy_task():
             await asyncio.sleep(10)
 
-        # Fill the queue
+        # Submit 5 tasks - should fill queue
         for _i in range(5):
             await queue.submit(coroutine=dummy_task)
 
-        # Try to submit one more - should fail
+        # Try to submit one more - should fail because queue is full
         with pytest.raises(asyncio.QueueFull):
             await queue.submit(coroutine=dummy_task)
 
+        # Start and stop the queue to clean up
+        await queue.start()
         await queue.stop()

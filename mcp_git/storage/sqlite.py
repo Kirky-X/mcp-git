@@ -118,15 +118,22 @@ class SqliteStorage:
                 await session.refresh(task_orm)
 
                 logger.info("Task created", task_id=str(task.id))
-                return task
 
-        # Log task creation outside of lock
-        await self.log_operation(
-            task_id=task.id,
-            operation=task.operation,
-            level="info",
-            message=f"Task created: {task.operation.value}",
-        )
+                # Log task creation within the same lock to ensure consistency
+                try:
+                    log_orm = OperationLogORM(
+                        task_id=str(task.id),
+                        operation=task.operation.value,
+                        level="info",
+                        message=f"Task created: {task.operation.value}",
+                        timestamp=int(datetime.now(UTC).timestamp()),
+                    )
+                    session.add(log_orm)
+                    await session.commit()
+                except Exception as e:
+                    logger.warning("Failed to log task creation", error=str(e))
+
+                return task
 
     async def get_task(self, task_id: UUID) -> Task | None:
         """
@@ -138,13 +145,12 @@ class SqliteStorage:
         Returns:
             Task if found, None otherwise
         """
-        async with self._lock:
-            async with self._async_session_maker() as session:
-                result = await session.execute(select(TaskORM).where(TaskORM.id == str(task_id)))
-                task_orm = result.scalar_one_or_none()
-                if task_orm is None:
-                    return None
-                return task_orm.to_task()
+        async with self._async_session_maker() as session:
+            result = await session.execute(select(TaskORM).where(TaskORM.id == str(task_id)))
+            task_orm = result.scalar_one_or_none()
+            if task_orm is None:
+                return None
+            return task_orm.to_task()
 
     async def update_task(
         self,
@@ -240,18 +246,17 @@ class SqliteStorage:
         Returns:
             List of tasks
         """
-        async with self._lock:
-            async with self._async_session_maker() as session:
-                query = select(TaskORM)
+        async with self._async_session_maker() as session:
+            query = select(TaskORM)
 
-                if status:
-                    query = query.where(TaskORM.status == status.value)
+            if status:
+                query = query.where(TaskORM.status == status.value)
 
-                query = query.order_by(TaskORM.created_at.desc()).limit(limit).offset(offset)
+            query = query.order_by(TaskORM.created_at.desc()).limit(limit).offset(offset)
 
-                result = await session.execute(query)
-                task_orms = result.scalars().all()
-                return [task_orm.to_task() for task_orm in task_orms]
+            result = await session.execute(query)
+            task_orms = result.scalars().all()
+            return [task_orm.to_task() for task_orm in task_orms]
 
     async def get_tasks_batch(self, task_ids: list[UUID]) -> list[Task]:
         """
@@ -343,28 +348,26 @@ class SqliteStorage:
         """
         from datetime import timedelta
 
+        from sqlalchemy import delete
+
         cutoff_timestamp = int(
             (datetime.now(UTC) - timedelta(seconds=retention_seconds)).timestamp()
         )
 
         async with self._lock:
             async with self._async_session_maker() as session:
-                result = await session.execute(
-                    select(TaskORM).where(TaskORM.created_at < cutoff_timestamp)
-                )
-                task_orms = result.scalars().all()
-
-                for task_orm in task_orms:
-                    await session.delete(task_orm)
-
+                # Use bulk delete with RETURNING to get count
+                stmt = delete(TaskORM).where(TaskORM.created_at < cutoff_timestamp)
+                result = await session.execute(stmt)
+                count = result.rowcount
                 await session.commit()
 
                 logger.info(
                     "Cleaned up expired tasks",
-                    count=len(task_orms),
+                    count=count,
                     retention_seconds=retention_seconds,
                 )
-                return len(task_orms)
+                return count
 
     # Workspace operations
 
@@ -398,15 +401,14 @@ class SqliteStorage:
         Returns:
             Workspace if found, None otherwise
         """
-        async with self._lock:
-            async with self._async_session_maker() as session:
-                result = await session.execute(
-                    select(WorkspaceORM).where(WorkspaceORM.id == str(workspace_id))
-                )
-                workspace_orm = result.scalar_one_or_none()
-                if workspace_orm is None:
-                    return None
-                return workspace_orm.to_workspace()
+        async with self._async_session_maker() as session:
+            result = await session.execute(
+                select(WorkspaceORM).where(WorkspaceORM.id == str(workspace_id))
+            )
+            workspace_orm = result.scalar_one_or_none()
+            if workspace_orm is None:
+                return None
+            return workspace_orm.to_workspace()
 
     async def get_workspace_by_path(self, path: Path) -> Workspace | None:
         """
@@ -502,17 +504,16 @@ class SqliteStorage:
         Returns:
             List of workspaces
         """
-        async with self._lock:
-            async with self._async_session_maker() as session:
-                query = (
-                    select(WorkspaceORM)
-                    .order_by(WorkspaceORM.last_accessed_at.desc())
-                    .limit(limit)
-                    .offset(offset)
-                )
-                result = await session.execute(query)
-                workspace_orms = result.scalars().all()
-                return [workspace_orm.to_workspace() for workspace_orm in workspace_orms]
+        async with self._async_session_maker() as session:
+            query = (
+                select(WorkspaceORM)
+                .order_by(WorkspaceORM.last_accessed_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            result = await session.execute(query)
+            workspace_orms = result.scalars().all()
+            return [workspace_orm.to_workspace() for workspace_orm in workspace_orms]
 
     async def get_oldest_workspaces(self, count: int = 10) -> list[Workspace]:
         """

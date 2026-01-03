@@ -189,7 +189,8 @@ class TaskQueue:
         )
 
         try:
-            await self._queue.put(task)
+            # Use put_nowait to avoid blocking - raises QueueFull immediately if queue is full
+            self._queue.put_nowait(task)
             self._metrics["submitted"] += 1
             logger.debug("Task submitted", task_id=task.id, priority=priority)
             return task.id
@@ -267,34 +268,26 @@ class TaskQueue:
         Returns:
             Metrics dictionary
         """
-        # Use lock to safely read metrics and active count
-        async with self._metrics_lock:
+        # Acquire both locks atomically to ensure consistent metrics
+        async with self._metrics_lock, self._active_lock:
             avg_time = (
                 self._metrics["total_processing_time"] / self._metrics["completed"]
                 if self._metrics["completed"] > 0
                 else 0.0
             )
 
-            metrics_snapshot = {
+            return {
                 "submitted": self._metrics["submitted"],
                 "completed": self._metrics["completed"],
                 "failed": self._metrics["failed"],
                 "retried": self._metrics["retried"],
                 "cancelled": self._metrics["cancelled"],
                 "avg_processing_time_seconds": avg_time,
+                "queue_size": self._queue.qsize(),
+                "active_count": self._active_count,
+                "max_concurrent": self.max_concurrent,
+                "available_slots": self.max_concurrent - self._active_count,
             }
-
-        # Use lock to safely read active count
-        async with self._active_lock:
-            active_count = self._active_count
-
-        return {
-            **metrics_snapshot,
-            "queue_size": self._queue.qsize(),
-            "active_count": active_count,
-            "max_concurrent": self.max_concurrent,
-            "available_slots": self.max_concurrent - active_count,
-        }
 
     async def _process_queue(self) -> None:
         """Process tasks from the queue."""
@@ -309,30 +302,29 @@ class TaskQueue:
                 except asyncio.TimeoutError:
                     continue
 
-                # Acquire semaphore
-                async with self._semaphore:
-                    if not self._running:
-                        # Put task back if we're stopping
-                        await self._queue.put(task)
-                        break
+                # Acquire semaphore before processing task
+                await self._semaphore.acquire()
 
-                    # Create worker task with lock protection
-                    async with self._active_lock:
-                        self._active_count += 1
-                        worker = asyncio.create_task(self._run_task(task))
-                        self._active_tasks.add(worker)
+                if not self._running:
+                    # Release semaphore and put task back if we're stopping
+                    self._semaphore.release()
+                    await self._queue.put(task)
+                    break
 
-                    def done_callback(t: asyncio.Task) -> None:
-                        # Use lock to safely update counters
-                        async def update_counters() -> None:
-                            async with self._active_lock:
-                                self._active_tasks.discard(t)
-                                self._active_count -= 1
+                # Create worker task
+                async with self._active_lock:
+                    self._active_count += 1
+                    worker = asyncio.create_task(self._run_task(task))
+                    self._active_tasks.add(worker)
 
-                        # Schedule the update as a task
-                        asyncio.create_task(update_counters())
+                def done_callback(t: asyncio.Task) -> None:
+                    # Release semaphore when task completes
+                    self._semaphore.release()
+                    # Update counters
+                    self._active_tasks.discard(t)
+                    self._active_count -= 1
 
-                    worker.add_done_callback(done_callback)
+                worker.add_done_callback(done_callback)
 
             except asyncio.CancelledError:
                 break

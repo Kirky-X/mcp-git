@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import Index, Integer, String, Text
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -40,7 +40,12 @@ class TaskORM(Base):
     completed_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Composite indexes for common queries
-    __table_args__ = ({"comment": "Task tracking table"},)
+    __table_args__ = (
+        Index("idx_status_created", "status", "created_at"),  # For get_pending_tasks()
+        Index("idx_operation_status", "operation", "status"),  # For operation filtering
+        Index("idx_workspace_created", "workspace_path", "created_at"),  # For workspace queries
+        {"comment": "Task tracking table"},
+    )
 
     def to_task(self) -> Task:
         """Convert ORM model to Task object."""
@@ -91,6 +96,13 @@ class WorkspaceORM(Base):
     last_accessed_at: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     created_at: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     metadata_json: Mapped[str | None] = mapped_column("metadata", Text, nullable=True)
+
+    # Composite indexes for common queries
+    __table_args__ = (
+        Index("idx_last_accessed", "last_accessed_at"),  # For LRU cleanup
+        Index("idx_size_accessed", "size_bytes", "last_accessed_at"),  # For size-based cleanup
+        {"comment": "Workspace tracking table"},
+    )
 
     def to_workspace(self) -> Workspace:
         """Convert ORM model to Workspace object."""

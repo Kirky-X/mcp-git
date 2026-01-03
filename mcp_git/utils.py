@@ -320,31 +320,64 @@ def sanitize_remote_url(url: str) -> str:
     if url_lower.startswith(("http://", "https://")):
         # Prevent SSRF by blocking localhost and private IPs
         import ipaddress
+        import socket
+        from urllib.parse import urlparse
 
         # Extract hostname from URL
         try:
-            from urllib.parse import urlparse
-
             parsed = urlparse(url)
             hostname = parsed.hostname
 
             if hostname:
-                # Block localhost variants
-                localhost_patterns = ["localhost", "127.0.0.1", "::1", "0.0.0.0"]  # nosec: B104 - SSRF protection, not binding
-                if hostname.lower() in localhost_patterns:
+                # Block localhost variants including obfuscated forms
+                localhost_patterns = [
+                    "localhost",
+                    "127.0.0.1",
+                    "::1",
+                    "0.0.0.0",
+                    "127.0.0.2",  # Other loopback addresses
+                    "127.1",
+                    "127.1.1.1",
+                    "127.0.0.1",
+                    "0177.0.0.1",  # Octal
+                    "0x7f.0.0.1",  # Hex
+                    "2130706433",  # Decimal
+                ]
+
+                hostname_lower = hostname.lower()
+                if hostname_lower in localhost_patterns:
                     raise ValueError(f"Localhost URLs are not allowed for security reasons: {url}")
 
                 # Block private IP ranges
                 try:
                     ip = ipaddress.ip_address(hostname)
-                    if ip.is_private or ip.is_loopback or ip.is_link_local:
-                        raise ValueError(f"Private IP addresses are not allowed: {hostname}")
+                    if ip.is_loopback or ip.is_link_local or ip.is_private or ip.is_reserved:
+                        raise ValueError(f"Private/local IP addresses are not allowed: {hostname}")
                 except ValueError:
-                    # Not an IP address, might be a hostname
-                    pass
+                    # Not an IP address, might be a hostname - resolve to check for DNS rebinding
+                    try:
+                        # Resolve both IPv4 and IPv6
+                        addr_info = socket.getaddrinfo(hostname, None)
+                        for addr in addr_info:
+                            try:
+                                ip = ipaddress.ip_address(addr[4][0])
+                                if ip.is_loopback or ip.is_link_local or ip.is_private or ip.is_reserved:
+                                    raise ValueError(
+                                        f"Hostname resolves to private/local IP: {hostname} -> {ip}"
+                                    )
+                            except (ValueError, IndexError):
+                                continue
+                    except socket.gaierror:
+                        # DNS resolution failed, but hostname might be valid
+                        pass
+
+                # Block file:// protocol explicitly
+                if parsed.scheme == "file":
+                    raise ValueError(f"file:// protocol is not allowed: {url}")
 
         except Exception as e:
             logger.warning(f"Failed to parse URL hostname: {e}")
+            raise ValueError(f"Invalid URL: {e}") from e
 
     return url
 
